@@ -33,9 +33,9 @@ builds its shared exports. Run it again after updating the submodule, before rei
 Bell calls the runtime in the same process, with one Eve runtime and one browser per conversation.
 Keep Eve versions aligned across both packages. The lockfile is generated dependency data.
 
-The initial runtime pin is Cookbook commit `bcda925b87a42e5100b122739a6446662964992e`,
-from [the shared-runtime draft PR](https://github.com/browserbase/cookbook/pull/27).
-The dependency is pinned to that commit, not a moving branch. See
+The shared runtime was introduced in
+[the Cookbook runtime PR](https://github.com/browserbase/cookbook/pull/27).
+The `vendor/cookbook` Git submodule records the exact reviewed revision. See
 [the repository layout and dependency notes](docs/repository.md).
 
 ## Baselayer merchant access
@@ -60,7 +60,9 @@ Best Buy browsing does not require Baselayer and does not demonstrate merchant v
   For hosted access, set `OP_SERVICE_ACCOUNT_TOKEN` instead; it takes precedence over `OP_ACCOUNT`.
   Save a Login item with the destination website, username, and password before asking Bell to log in.
   Add a one-time password field if the site uses TOTP. The shared vault tools enforce the saved
-  website host and resolve credentials on the server. A URL alone does not provide a login.
+  website host and HTTPS before filling credentials. Keep `BROWSIE_LOG_SESSION=false` before
+  starting a hosted login session. Credentials are resolved on the server; a URL alone does not
+  provide a login.
 - Linq: text Bell at **+1 628-298-8686** after configuring your Linq API key, webhook signing
   secret, and personal sending number. Follow the [Linq setup and phone demo](docs/linq.md).
   Each Linq chat keeps its own conversation and browser. Baselayer is not required for browsing.

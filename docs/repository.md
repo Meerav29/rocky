@@ -16,8 +16,8 @@ package.json            Bell dependencies and commands
 pnpm-lock.yaml          Reproducible Bell dependency resolution
 ```
 
-The submodule points at Cookbook commit `bcda925b87a42e5100b122739a6446662964992e`, which exports
-the shared runtime in draft PR #27. This preserves the existing tested browser tools, vault
+The submodule pins the shared runtime introduced in Cookbook PR #27. Its recorded Git revision
+is the dependency version used by Bell. This preserves the browser tools, vault
 integration, Contexts, and handoff without copying Browsie's web application into Bell. GitHub
 shows the dependency as a link to that commit, not thousands of added source files.
 

@@ -1,6 +1,8 @@
-# Bell-Stack
+# BELL 🔔
 
-**Ring the BELL and put your personal assistant to work.** Bell pairs an Eve agent with browser
+**Ring the BELL and put your personal assistant to work.** 
+
+Bell pairs an Eve agent with browser
 automation powered by Browserbase and a compact web interface. This standalone repository owns
 Bell's agent, interface, configuration, and merchant integration.
 The pinned `browsie` package supplies Stagehand/Browserbase session management, browser tools,

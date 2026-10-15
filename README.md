@@ -66,7 +66,7 @@ Best Buy browsing does not require Baselayer and does not demonstrate merchant v
   website host and HTTPS before filling credentials. Keep `BROWSIE_LOG_SESSION=false` before
   starting a hosted login session. Credentials are resolved on the server; a URL alone does not
   provide a login.
-- Linq: text Bell at **+1 628-298-8686** after configuring your Linq API key, webhook signing
+- Linq: text Bell at **+12025550100** after configuring your Linq API key, webhook signing
   secret, and personal sending number. Follow the [Linq setup and phone demo](docs/linq.md).
   Each Linq chat keeps its own conversation and browser. Baselayer is not required for browsing.
 - Handoff: set a random `BROWSIE_HANDOFF_SECRET` of at least 32 characters and

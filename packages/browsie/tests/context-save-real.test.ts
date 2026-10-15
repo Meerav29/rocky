@@ -55,9 +55,12 @@ describe("opt-in live Context save", () => {
         const restored = await reader.exportCookies();
         expect(restored.some((cookie) => cookie.value === marker)).toBe(true);
       } finally {
-        await writer?.close();
-        await reader?.close();
-        await sdk.contexts.delete(remote.id).catch(() => undefined);
+        try {
+          const closed = await Promise.allSettled([writer?.close(), reader?.close()]);
+          expect(closed.every((result) => result.status === "fulfilled")).toBe(true);
+        } finally {
+          await sdk.contexts.delete(remote.id, { headers: { "Content-Type": null } });
+        }
       }
     },
     120_000,

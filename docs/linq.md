@@ -1,6 +1,6 @@
 # Text Bell through Linq
 
-Bell's assigned demo line is **+1 628-298-8686** (`+16282988686` in configuration).
+Bell's assigned demo line is **+12025550100** (`+12025550100` in configuration).
 Linq carries iMessage and SMS. Stripe Link checkout is a separate future integration.
 
 ```text
@@ -32,7 +32,7 @@ still need a reachable HTTPS application host. See
    ```dotenv
    LINQ_API_KEY=<API token for the Linq account that owns the line>
    LINQ_WEBHOOK_SECRET=<signing secret from the webhook subscription>
-   BELL_LINQ_PHONE_NUMBER=+16282988686
+   BELL_LINQ_PHONE_NUMBER=+12025550100
    BELL_LINQ_ALLOWED_SENDERS=<your personal phone number, starting with + and country code>
    ```
 
@@ -55,7 +55,7 @@ still need a reachable HTTPS application host. See
    | --- | --- |
    | Target URL | `https://<your reachable Bell host>/eve/v1/linq?version=2026-02-03` |
    | Event | `message.received` |
-   | Phone-number filter | `+16282988686` |
+   | Phone-number filter | `+12025550100` |
 
    Save the subscription's signing secret as `LINQ_WEBHOOK_SECRET`, then restart Bell. The target
    is the Bell application. Best Buy is the website Bell visits, so do not enter it as the webhook

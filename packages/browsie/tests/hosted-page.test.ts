@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { browserbase, localBrowser } from "@browserbasehq/stagehand";
 import { BrowsieBrowserSession, browserbaseLaunchOptions } from "../server/browser-session";
 import type { ConversationState } from "../server/types";
 
@@ -31,6 +32,7 @@ function fixture(loggingDisabled = true) {
   return { session, state, page };
 }
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -78,5 +80,38 @@ describe("shared hosted-page integration boundary", () => {
     const options = browserbaseLaunchOptions("test-key");
     expect(options.browserSettings.logSession).toBe(false);
     expect(options.userMetadata.networkLogging).toBe("false");
+  });
+
+  it.each([undefined, { country: "US" }])("keeps Verified and managed proxies enabled with location %j", (location) => {
+    const options = browserbaseLaunchOptions("test-key", "test-context", location);
+    expect(options.browserSettings).toMatchObject({
+      verified: true,
+      context: { id: "test-context", persist: true },
+    });
+    expect(options.keepAlive).toBe(true);
+    expect(options.proxies).toEqual(location
+      ? [{ type: "browserbase", geolocation: location }]
+      : true);
+  });
+
+  it("retries hosted failures with Verified enabled and never falls back to local Chrome", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("STAGEHAND_BROWSER", "browserbase");
+    vi.stubEnv("BROWSERBASE_API_KEY", "test-key");
+    const launch = vi.spyOn(browserbase, "launch").mockRejectedValue(new Error("Synthetic launch failure"));
+    const localLaunch = vi.spyOn(localBrowser, "launch");
+    const state: ConversationState = {
+      id: "verified-retry-test", traces: [],
+      browser: { provider: "not-started", status: "idle" },
+    };
+    const session = new BrowsieBrowserSession(state);
+    const failure = expect(session.start()).rejects.toThrow("Synthetic launch failure");
+    await vi.runAllTimersAsync();
+    await failure;
+    expect(launch).toHaveBeenCalledTimes(3);
+    for (const [options] of launch.mock.calls) {
+      expect(options).toMatchObject({ proxies: true, browserSettings: { verified: true } });
+    }
+    expect(localLaunch).not.toHaveBeenCalled();
   });
 });

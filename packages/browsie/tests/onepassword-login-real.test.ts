@@ -7,14 +7,16 @@ import { onePasswordVault } from "../server/vault/index.js";
 const live =
   process.env.BROWSIE_LIVE_ONEPASSWORD === "1" &&
   Boolean(process.env.BROWSERBASE_API_KEY) &&
-  Boolean(process.env.OP_SERVICE_ACCOUNT_TOKEN);
+  Boolean(process.env.OP_SERVICE_ACCOUNT_TOKEN || process.env.OP_ACCOUNT);
 
 describe("opt-in live 1Password login", () => {
   it.runIf(live)(
     "uses a Login item without exposing credentials to the model",
     async () => {
       const items = await onePasswordVault.list(),
-        item = items.find((candidate) => candidate.allowedHosts.includes("authenticationtest.com"));
+        item = items.find((candidate) =>
+          candidate.label === "Bell integration test (authenticationtest.com)" &&
+          candidate.allowedHosts.includes("authenticationtest.com"));
       expect(item).toBeDefined();
       expect(item?.fields).toEqual({
         username: true,
@@ -30,7 +32,6 @@ describe("opt-in live 1Password login", () => {
         }),
         username = await onePasswordVault.resolve(ref("username")),
         password = await onePasswordVault.resolve(ref("password")),
-        totp = await onePasswordVault.resolve(ref("totp")),
         state: ConversationState = {
           id: "live-onepassword-login",
           traces: [],
@@ -44,6 +45,7 @@ describe("opt-in live 1Password login", () => {
             url: "https://authenticationtest.com/totpChallenge/",
           },
         ]);
+        const totp = await onePasswordVault.resolve(ref("totp"));
         const result = await session.secureLogin({
           allowedHosts: item.allowedHosts,
           username,
@@ -60,6 +62,8 @@ describe("opt-in live 1Password login", () => {
         expect(new URL(result.url).pathname).toBe("/loginSuccess/");
         expect(page.tree).toContain("Login Success");
         expect(page.tree).toContain("You are now logged in");
+        const visible = JSON.stringify({ result, traces: state.traces });
+        expect([username, password, totp].some((secret) => visible.includes(secret))).toBe(false);
         console.log(
           JSON.stringify(
             {

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import linq from "../agent/channels/linq";
 
-const receivingNumber = "+16282988686";
+const receivingNumber = "+12025550100";
 const senderNumber = "+12025550123";
 const signingKey = Buffer.from("bell-test-key-for-webhooks-only!!");
 const route = linq.routes.find((entry) => entry.method === "POST")!;

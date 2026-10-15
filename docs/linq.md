@@ -17,6 +17,16 @@ process. Baselayer credentials are not required for ordinary browsing.
 
 ## Configure the line
 
+Use Bell's deployed HTTPS origin directly. The intended flow is
+`Linq -> Bell -> Browserbase`, with handoff links served by that same Bell origin.
+No tunnel process or Cloudflare-specific application setup is required.
+
+Hosted browser launches request `browserSettings: { verified: true }` and managed
+proxies on every attempt. Verified Browsers provide browser identity for websites
+Bell visits. The receiving webhook and handoff pages are served by Bell, so they
+still need a reachable HTTPS application host. See
+[Browserbase Verified Browsers](https://www.browserbase.com/verified).
+
 1. In Bell's ignored `.env.local`, set these server-only values:
 
    ```dotenv
@@ -32,11 +42,12 @@ process. Baselayer credentials are not required for ordinary browsing.
    browser Context data are shared. Group chats and iMessage email handles are not supported
    by this phone-only policy. `BROWSIE_LINQ_ALLOWED_USER_IDS` configures Browsie, not Bell.
 
-2. Run Bell on port **4320**, with a reachable HTTPS address for its webhook. Keep the web UI
-   and other agent routes behind authentication. Allow direct Linq delivery to the exact webhook
-   path, where Eve verifies the signing secret. A local relay should forward only this path;
-   do not expose the entire development server. Browsie's `dev:linq` command starts Browsie on
-   4318, so it does not launch this Bell app.
+2. Deploy Bell behind your chosen HTTPS application origin. Protect the web UI,
+   session-control routes, and any administration endpoints with application authentication.
+   Route Linq requests directly to `/eve/v1/linq`, where Eve verifies the signing secret;
+   an interactive login screen must not intercept the webhook. Handoff routes validate
+   their encrypted, expiring token. A local `pnpm dev` instance remains on port **4320**;
+   Linq and a phone cannot reach its loopback address.
 
 3. In the [Linq dashboard](https://dashboard.linqapp.com/api-tooling), create a webhook subscription:
 
@@ -57,7 +68,14 @@ process. Baselayer credentials are not required for ordinary browsing.
 
 4. For optional human handoff, set `BROWSIE_PUBLIC_URL` to Bell's reachable origin and
    `BROWSIE_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
-   link works only on the computer running Bell; a phone needs a reachable, authenticated host.
+   link works only on the computer running Bell; a phone needs the deployed HTTPS origin.
+   Keep handoff links private because the token grants control of that browser until expiry.
+
+5. Use persistent storage for Bell's Context metadata and vault data on a single-instance
+   host, or configure durable shared storage before a multi-instance/serverless deployment.
+   Hosted 1Password access requires a scoped `OP_SERVICE_ACCOUNT_TOKEN`; `OP_ACCOUNT`
+   desktop authorization works only on the machine running the 1Password app. Keep all
+   provider credentials server-side in the deployment's secret configuration.
 
 ## Demo from your phone
 
@@ -84,6 +102,6 @@ no model or browser. It covers valid direct messages, same-chat routing, missing
 signatures, wrong lines or senders, groups, bot echoes, outbound messages, and invalid settings.
 
 A live phone round trip also needs the actual Linq credentials, reachable webhook, allowed sender,
-and Browserbase/OpenAI credentials. A local relay lasts only while its process and Bell are running.
+and Browserbase/OpenAI credentials. Verified browser mode alone does not establish inbound delivery.
 For Baselayer-protected merchant access, follow [the separate sandbox flow](baselayer.md).
 It needs a compatible merchant and a current verified principal. Payment integrations are future work.

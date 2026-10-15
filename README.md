@@ -11,12 +11,11 @@ with a signed webhook and a private sender list.
 
 ## Run locally
 
-Use Node.js 24 and pnpm 10.33.4. Clone Bell and initialize its shared runtime:
+Use Node.js 24 and pnpm 10.33.4. Clone Bell and install its workspace:
 
 ```sh
-git clone --recurse-submodules https://github.com/browserbase/bell-stack.git
+git clone https://github.com/browserbase/bell-stack.git
 cd bell-stack
-pnpm setup:runtime
 pnpm install --frozen-lockfile
 cp .env.example .env
 # Set OPENAI_API_KEY and BROWSERBASE_API_KEY in .env.
@@ -28,17 +27,19 @@ in one persistent Browserbase session. Ask for a screenshot to update the captur
 messages at the same `/s/...` address reuse the conversation and browser. Stop cancels active work.
 The panel is a screenshot viewer; use `human_handoff` when you need to interact with the browser.
 
-The `browsie` dependency comes from `vendor/cookbook/projects/browsie`. Git tracks that submodule
-as one commit pointer, so Bell does not contain a second copy of Browsie's source in its history.
-`pnpm setup:runtime` checks out the pinned revision, installs that package's dependencies, and
-builds its shared exports. Run it again after updating the submodule, before reinstalling Bell.
-Bell calls the runtime in the same process, with one Eve runtime and one browser per conversation.
-Keep Eve versions aligned across both packages. The lockfile is generated dependency data.
+The `browsie` dependency is the local workspace package in `packages/browsie`. Its source,
+standalone application, and tests are included in this repository. `pnpm dev` and `pnpm build`
+build its shared exports automatically; `pnpm setup:runtime` rebuilds them explicitly after
+editing Browsie. Restart Bell after a runtime change. Bell calls the runtime in the same process,
+with one Eve runtime and one browser per conversation. Keep Eve versions aligned across both
+packages. The root lockfile covers the whole workspace.
 
-The shared runtime was introduced in
-[the Cookbook runtime PR](https://github.com/browserbase/cookbook/pull/27).
-The `vendor/cookbook` Git submodule records the exact reviewed revision. See
-[the repository layout and dependency notes](docs/repository.md).
+The package was imported from the exact Cookbook revision previously pinned by Bell. See
+[the repository layout and source provenance](docs/repository.md).
+
+For phone use, point Linq directly at Bell's HTTPS deployment and use the same origin
+for handoff links. Hosted browser launches keep `browserSettings.verified: true` and
+managed proxies enabled. See [Linq setup](docs/linq.md).
 
 ## Baselayer merchant access
 
@@ -78,15 +79,14 @@ checkout are follow-up integrations; this project does not yet submit payments.
 ## Check the code
 
 ```sh
-pnpm test
-pnpm typecheck
-pnpm lint
-pnpm build
+pnpm check:workspace
 ```
 
-The default suite makes no live provider calls. A successful build verifies compilation only.
+This checks Browsie and Bell, including both standalone production builds. Browsie's live tests
+remain opt-in and skip without their required configuration. The default suite makes no live
+provider calls. A successful build verifies compilation only.
 Keep this demo local until you configure application authentication and durable storage. Eve's
 default HTTP channel rejects unauthenticated production traffic. The shared vault/Context data
 uses local files and is scoped to a single demo operator. See
-[`vendor/cookbook/projects/browsie/README.md`](vendor/cookbook/projects/browsie/README.md) for runtime
-settings and [the vault guide](vendor/cookbook/projects/browsie/docs/vault-and-otp.md) for the credential boundary.
+[`packages/browsie/README.md`](packages/browsie/README.md) for runtime
+settings and [the vault guide](packages/browsie/docs/vault-and-otp.md) for the credential boundary.

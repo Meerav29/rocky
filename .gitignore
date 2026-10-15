@@ -10,3 +10,6 @@ node_modules/
 coverage/
 .DS_Store
 .pnpm-store/
+AGENT.md
+AGENTS.md
+CLAUDE.md

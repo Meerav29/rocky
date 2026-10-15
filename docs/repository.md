@@ -1,41 +1,66 @@
-# Standalone Bell repository
+# Bell and Browsie workspace
 
 Bell lives in [browserbase/bell-stack](https://github.com/browserbase/bell-stack).
-Its application files sit at the repository root:
+The complete Browsie package is tracked here so contributors can review and change both sides
+of the browser integration in one pull request.
 
 ```text
-agent/                  Eve agent, Linq channel, shared tool imports
-app/                    Web interface and human handoff routes
-server/                 Baselayer minting and one-request merchant proof
-scripts/                Standalone mint command
-tests/                  Browser interface, Linq, and merchant-access tests
+agent/                  Bell's Eve agent, Linq channel, and tool imports
+app/                    Bell's web interface and handoff routes
+server/                 Bell's Baselayer integration
+packages/browsie/        Browsie source, standalone app, shared exports, and tests
+scripts/                Bell's standalone mint command
+tests/                  Bell's tests
 docs/                   Setup and demo guides
-vendor/cookbook/         Git submodule containing the shared Browsie package
-.env.example            Server configuration template
-package.json            Bell dependencies and commands
-pnpm-lock.yaml          Reproducible Bell dependency resolution
+pnpm-workspace.yaml     Workspace package membership
+pnpm-lock.yaml          Shared dependency resolutions
 ```
 
-The submodule pins the shared runtime introduced in Cookbook PR #27. Its recorded Git revision
-is the dependency version used by Bell. This preserves the browser tools, vault
-integration, Contexts, and handoff without copying Browsie's web application into Bell. GitHub
-shows the dependency as a link to that commit, not thousands of added source files.
+## Source provenance
 
-Cloning with `--recurse-submodules` downloads the dependency repository. `pnpm setup:runtime`
-also initializes it when omitted during cloning. The shared runtime still needs to be built before
-Bell's `file:` dependency is installed. The submodule and generated dependency files are excluded
-from Bell's lint and TypeScript source discovery; imported runtime types are still checked.
+`packages/browsie` was imported from `projects/browsie` in
+[browserbase/cookbook at 93483ce09eacb4d08014bb49c8d701cb77943186](https://github.com/browserbase/cookbook/tree/93483ce09eacb4d08014bb49c8d701cb77943186/projects/browsie),
+the exact submodule revision Bell used before this import. The package's MIT license is retained
+in [packages/browsie/LICENSE](../packages/browsie/LICENSE). Only tracked package files were imported;
+local environment files, browser data, dependencies, and generated output are excluded.
 
-Bell can be versioned and deployed independently. It still depends on the pinned Browsie source.
-A future published Browsie package could replace the submodule without changing Bell's imports.
-Until then, changing that dependency is an explicit Git submodule update followed by setup,
-installation, tests, typecheck, lint, and build. Do not update it automatically to Cookbook main.
+Packaging and contributor documentation are adapted to this workspace. The import removes
+unused trace-writing, task-history, and console-event helpers, unused response types, and the
+direct dotenv dependency formerly used by the tunnel runner. The active runtime behavior is
+preserved. The nested lockfile is consolidated into the root lockfile, and the existing Eve/Undici
+override is enforced at the workspace root. Eve remains 0.47.6 in both packages. An Eve upgrade
+is separate work. The optional tunnel runner is omitted; messaging and phone handoff use Bell's
+direct HTTPS deployment.
 
-This stage adds Baselayer minting and merchant access to the browser assistant, web interface,
-and signed Linq messaging channel. The merchant verifier remains a separate deployment. Linq
-uses the same agent tools in a separate conversation for each phone chat. Stripe Link CLI and
-Visa checkout remain follow-up integrations.
+Repository-specific coding-agent entry files are omitted. Both Next.js apps disable their
+automatic generation; contributor guidance lives in the README and CONTRIBUTING documents.
 
-The original Cookbook drafts remain separate from this repository. Keep the shared-runtime change
-in Cookbook. Once Bell's standalone draft is published, the Bell app and merchant-access drafts
-in Cookbook can be closed as superseded. No history needs to be force-pushed or deleted.
+This is a maintained local copy. Cookbook changes do not arrive automatically. Review upstream
+changes against the recorded source revision and bring over relevant fixes deliberately.
+
+## Install and build
+
+Use Node.js 24 and pnpm 10.33.4:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+`pnpm dev` and `pnpm build` first build Browsie's shared exports. After editing runtime code,
+run `pnpm setup:runtime` and restart Bell. The package's standalone app can be started with
+`pnpm --filter browsie dev`; it has its own configuration and runs on port 4318.
+
+Bell depends on `browsie` through `workspace:*`. Imports such as `browsie/runtime` and
+`browsie/tools/run` resolve to `packages/browsie`. Bell still calls the runtime in-process,
+with one browser per conversation. Importing the package does not start its standalone app.
+
+## Verify changes
+
+Run `pnpm check:workspace` from the root. It runs Browsie's tests, typecheck, lint,
+and production build, followed by Bell's tests, typecheck, lint, and production
+build. Bell and Browsie each use their own TypeScript and ESLint configurations. CI checks both.
+
+The default tests use mocks. Provider-backed tests are opt-in and require service configuration;
+report those separately. Keep Eve versions aligned and repeat the workspace checks when changing
+shared dependencies. Keep generated `dist`, `.eve`, `.next`, `.output`, and browser data untracked.

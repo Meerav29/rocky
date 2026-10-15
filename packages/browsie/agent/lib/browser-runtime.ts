@@ -154,23 +154,24 @@ export async function saveBrowserRuntime(sessionId: string): Promise<void> {
 }
 
 export async function closeBrowserRuntime(sessionId: string): Promise<void> {
-  const runtime = runtimes.get(sessionId);
+  // Terminal cleanup can run in a new worker after the last turn. Recover the
+  // persisted browser ID without opening another browser or creating a Context.
+  const runtime =
+    runtimes.get(sessionId) ??
+    (taskState.get().browser.sessionId ? getRuntime(sessionId) : undefined);
   if (runtime) {
-    runtimes.delete(sessionId);
     if (runtime.idleTimer) clearTimeout(runtime.idleTimer);
-    try {
-      await runtime.browser.close();
-    } finally {
-      taskState.update((current) =>
-        closeTaskBrowser(
-          updateTaskBrowser(
-            current,
-            runtime.state.browser,
-            runtime.state.traces.map((trace) => trace.id),
-          ),
+    await runtime.browser.close();
+    runtimes.delete(sessionId);
+    taskState.update((current) =>
+      closeTaskBrowser(
+        updateTaskBrowser(
+          current,
+          runtime.state.browser,
+          runtime.state.traces.map((trace) => trace.id),
         ),
-      );
-    }
+      ),
+    );
     return;
   }
   taskState.update(closeTaskBrowser);
@@ -409,3 +410,14 @@ function scheduleIdleClose(sessionId: string, runtime: BrowserRuntime): void {
   }, timeoutMs);
   runtime.idleTimer.unref?.();
 }
+
+// Channel callbacks also run when Eve ends a session outside a turn.
+// Global stream hooks do not run on that path in Eve 0.79.1.
+export const browserChannelEvents = {
+  async "session.completed"(_event: unknown, _channel: unknown, ctx: { session: { id: string } }) {
+    await closeBrowserRuntime(ctx.session.id);
+  },
+  async "session.failed"(event: { sessionId: string }) {
+    await closeBrowserRuntime(event.sessionId);
+  },
+};

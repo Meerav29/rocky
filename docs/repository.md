@@ -28,8 +28,8 @@ Packaging and contributor documentation are adapted to this workspace. The impor
 unused trace-writing, task-history, and console-event helpers, unused response types, and the
 direct dotenv dependency formerly used by the tunnel runner. The active runtime behavior is
 preserved. The nested lockfile is consolidated into the root lockfile, and the existing Eve/Undici
-override is enforced at the workspace root. Eve remains 0.47.6 in both packages. An Eve upgrade
-is separate work. The optional tunnel runner is omitted; messaging and phone handoff use Bell's
+override is enforced at the workspace root. Bell and Browsie now use Eve 0.79.1 and its
+required AI SDK 7.0.137 peer. The optional tunnel runner is omitted; messaging and phone handoff use Bell's
 direct HTTPS deployment.
 
 Repository-specific coding-agent entry files are omitted. Both Next.js apps disable their
@@ -64,3 +64,21 @@ build. Bell and Browsie each use their own TypeScript and ESLint configurations.
 The default tests use mocks. Provider-backed tests are opt-in and require service configuration;
 report those separately. Keep Eve versions aligned and repeat the workspace checks when changing
 shared dependencies. Keep generated `dist`, `.eve`, `.next`, `.output`, and browser data untracked.
+
+## Browser retirement
+
+The HTTP and Linq channels release the hosted browser on terminal session events, including
+when cleanup runs in a fresh worker. Eve 0.79.1 skips global stream hooks for completion outside
+a turn, so cleanup uses channel callbacks. A failed release retains the browser ID and reaches
+Eve's error logging; failed callbacks are not automatically retried. Starting a new conversation
+resets the prior session and releases its browser. Browserbase sessions still have provider
+lifetimes, so this does not guarantee an indefinitely running browser.
+
+With Bell running locally and its provider credentials loaded, run the opt-in regression:
+
+```sh
+BELL_LIVE_RETIREMENT=1 pnpm test:retirement:live
+```
+
+The test opens example.com, checks browser reuse across two turns, resets the session, verifies
+provider release, and deletes its temporary Context. It uses the configured model and Browserbase.

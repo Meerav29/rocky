@@ -4,6 +4,7 @@ import { build } from "esbuild";
 const entries = {
   runtime: "agent/lib/browser-runtime.ts",
   "channels/linq": "agent/channels/linq.ts",
+  "channels/eve": "agent/channels/eve.ts",
   handoff: "app/handoff/[token]/route.ts",
   "handoff-live": "app/handoff/[token]/live/route.ts",
 };

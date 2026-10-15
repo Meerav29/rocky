@@ -1,4 +1,4 @@
-import { requiredEnvironmentValue } from "browsie/channels/linq";
+import { linqBrowserEvents, requiredEnvironmentValue } from "browsie/channels/linq";
 import { defaultLinqAuth, linqChannel, type LinqChannelConfig } from "eve/channels/linq";
 import { z } from "zod";
 
@@ -28,6 +28,7 @@ export function isAllowedBellMessage(message: Pick<LinqMessage, "author" | "raw"
 }
 
 export default linqChannel({
+  events: linqBrowserEvents,
   userName: "Bell",
   credentials: {
     apiKey: () => requiredEnvironmentValue("LINQ_API_KEY"),

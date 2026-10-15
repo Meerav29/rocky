@@ -65,13 +65,14 @@ async function deliver(event: ReturnType<typeof message>, options: { tamper?: bo
   // Stop at the real adapter's Eve dispatch boundary; never run a model or browser.
   const from = vi.fn(() => new Proxy({}, {
     get(_target, property) {
-      if (typeof property === "symbol") return dispatch;
+      if (property === "send") return dispatch;
       throw new Error(`Unexpected Eve operation: ${String(property)}`);
     },
   })) as unknown as RouteContext["from"];
   const unsupported = () => { throw new Error("Unexpected Eve route operation"); };
   const response = await route.handler(request, {
     from, resolveSession: unsupported, attachSession: unsupported, to: unsupported,
+    describe: unsupported, listSkillFiles: unsupported, readSkill: unsupported, invokeTool: unsupported,
     params: {}, requestIp: null, waitUntil: (task) => { tasks.push(task); },
   });
   if (!(response instanceof Response)) throw new Error("Expected an HTTP webhook response.");
@@ -86,9 +87,8 @@ describe("Bell's signed Linq webhook", () => {
     expect(response.status).toBe(200);
     expect(from).toHaveBeenCalledWith(expect.stringContaining(event.data.chat.id));
     expect(dispatch).toHaveBeenCalledOnce();
-    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+    expect(dispatch).toHaveBeenCalledWith(event.data.parts[0].value, expect.objectContaining({
       context: [expect.stringContaining("Bell's private Linq")],
-    }), expect.objectContaining({
       auth: expect.objectContaining({ principalId: "linq:sender-handle-id", principalType: "user" }),
       state: { thread: expect.objectContaining({ isDM: true }) },
     }));

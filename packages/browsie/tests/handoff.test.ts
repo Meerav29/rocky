@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { GET } from "../app/handoff/[token]/route";
 
 import {
   BrowserHandoffError,
@@ -16,8 +18,40 @@ const target = {
 
 describe("browser handoff", () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.BROWSIE_HANDOFF_SECRET;
     delete process.env.BROWSIE_PUBLIC_URL;
+  });
+
+  it("allows the same-origin Live View redirect while retaining private response headers", async () => {
+    vi.stubEnv("BROWSIE_HANDOFF_SECRET", secret);
+    const token = issueBrowserHandoffToken(target, { secret });
+    const response = await GET(new Request("https://browsie.example"), {
+      params: Promise.resolve({ token }),
+    });
+    expect(response.status).toBe(200);
+    const policy = response.headers.get("content-security-policy")!;
+    expect(policy).toContain("frame-src 'self' https://browserbase.com https://*.browserbase.com;");
+    expect(policy).toContain("default-src 'none';");
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(await response.text()).toContain(`src="/handoff/${token}/live"`);
+  });
+
+  it("rejects invalid and expired page tokens before rendering a frame", async () => {
+    vi.stubEnv("BROWSIE_HANDOFF_SECRET", secret);
+    for (const [token, status] of [
+      ["invalid", 404],
+      [issueBrowserHandoffToken(target, { secret, now: 1_000, ttlMs: 1_000 }), 410],
+    ] as const) {
+      const response = await GET(new Request("https://browsie.example"), {
+        params: Promise.resolve({ token }),
+      });
+      expect(response.status).toBe(status);
+      expect(await response.text()).not.toContain("<iframe");
+      expect(response.headers.get("cache-control")).toContain("no-store");
+    }
   });
 
   it("issues an opaque URL and verifies its scoped session target", () => {

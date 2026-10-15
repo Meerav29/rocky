@@ -62,7 +62,7 @@ function handoffHeaders(contentType: string): HeadersInit {
   return {
     "cache-control": "no-store, private, max-age=0",
     "content-security-policy":
-      "default-src 'none'; frame-src https://browserbase.com https://*.browserbase.com; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "default-src 'none'; frame-src 'self' https://browserbase.com https://*.browserbase.com; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "content-type": contentType,
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",

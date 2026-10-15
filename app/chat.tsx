@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
+import { Client } from "eve/client";
 import { useState } from "react";
 import { browserPreview } from "./projection";
 
@@ -9,6 +10,7 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
   const router = useRouter();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
+  const [retiring, setRetiring] = useState(false);
   const agent = useEveAgent({
     initialSession: sessionId ? { sessionId, streamIndex: 0 } : undefined,
     resume: Boolean(sessionId),
@@ -18,7 +20,7 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
     },
   });
   const busy = agent.status === "submitted" || agent.status === "streaming";
-  const waiting = busy || agent.status === "resuming";
+  const waiting = busy || agent.status === "resuming" || retiring;
   const preview = browserPreview(agent.events);
   const pending = agent.data.messages
     .flatMap((message) => message.parts)
@@ -37,6 +39,22 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
       setError("The request failed. Check the local server and retry.");
     }
   }
+  async function newConversation() {
+    if (waiting) return;
+    setRetiring(true);
+    setError("");
+    try {
+      if (agent.session)
+        await new Client({ host: "" }).sessions.attach(agent.session.sessionId).reset();
+      agent.reset();
+      setInput("");
+      router.push("/");
+    } catch {
+      setError("Could not close this conversation. Please retry.");
+    } finally {
+      setRetiring(false);
+    }
+  }
   return (
     <main>
       <header>
@@ -49,12 +67,7 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
         <button
           className="new-chat"
           disabled={waiting}
-          onClick={() => {
-            agent.reset();
-            setInput("");
-            setError("");
-            router.push("/");
-          }}
+          onClick={() => void newConversation()}
         >
           New conversation
         </button>

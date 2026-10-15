@@ -782,12 +782,18 @@ export class BrowsieBrowserSession {
   }
 
   private async releaseRemoteSession(): Promise<void> {
-    const sessionId = this.remoteSessionId;
+    const sessionId = this.remoteSessionId ?? this.loadPersistedSessionId();
+    if (!sessionId) return;
+    this.browserbase ??= new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
+    try {
+      await this.browserbase.sessions.update(sessionId, { status: "REQUEST_RELEASE" });
+    } catch (error) {
+      // An already removed session is released. Keep the ID on every other
+      // failure so cleanup can retry instead of silently orphaning the browser.
+      if (!(error instanceof Browserbase.APIError) || error.status !== 404)
+        throw new Error("The hosted browser could not be released. Retry cleanup.");
+    }
     this.remoteSessionId = undefined;
-    if (!sessionId || !this.browserbase) return;
-    await this.browserbase.sessions
-      .update(sessionId, { status: "REQUEST_RELEASE" })
-      .catch(() => undefined);
     this.clearPersistedSessionId();
   }
 

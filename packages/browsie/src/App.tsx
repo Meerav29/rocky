@@ -3,6 +3,7 @@
 import Image from "next/image";
 
 import { useEveAgent } from "eve/react";
+import { Client } from "eve/client";
 import {
   Activity,
   ArrowDown,
@@ -131,6 +132,8 @@ export default function App({
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
   const [stopStatus, setStopStatus] = useState<StopStatus>("idle");
   const [stopError, setStopError] = useState<string>();
+  const [retiring, setRetiring] = useState(false);
+  const [retirementError, setRetirementError] = useState<string>();
   const stopRequestRef = useRef<Promise<unknown> | undefined>(undefined);
   const cancellationObservedRef = useRef(false);
   const [agentSettings, setAgentSettings] = useState<AgentSettings>(defaultAgentSettings);
@@ -191,7 +194,7 @@ export default function App({
     },
   });
   const busy = agent.status === "submitted" || agent.status === "streaming";
-  const resuming = agent.status === "resuming";
+  const resuming = agent.status === "resuming" || retiring;
   const messages = useMemo(() => projectMessages(agent.data.messages), [agent.data.messages]);
   const visibleMessages = useMemo(() => {
     const confirmedUsers = messages.filter((message) => message.role === "user");
@@ -349,7 +352,19 @@ export default function App({
     }
   }
 
-  function newChat() {
+  async function newChat() {
+    if (busy || resuming) return;
+    setRetiring(true);
+    setRetirementError(undefined);
+    try {
+      if (agent.session)
+        await new Client({ host: "" }).sessions.attach(agent.session.sessionId).reset();
+    } catch {
+      setRetirementError("Could not close this task. Please retry.");
+      return;
+    } finally {
+      setRetiring(false);
+    }
     agent.reset();
     cancellationObservedRef.current = false;
     stopRequestRef.current = undefined;
@@ -379,7 +394,7 @@ export default function App({
           <Logo />
           <span>Browsie</span>
         </button>
-        <button className="new-chat" onClick={newChat}>
+        <button className="new-chat" disabled={busy || resuming} onClick={() => void newChat()}>
           <Plus size={17} /> New task
         </button>
         <div className="side-label">Tasks</div>
@@ -474,7 +489,7 @@ export default function App({
             browser={browser}
             captcha={captcha}
             busy={busy}
-            error={agent.error?.message}
+            error={retirementError ?? agent.error?.message}
             input={input}
             latestTool={latestTool}
             messages={visibleMessages}

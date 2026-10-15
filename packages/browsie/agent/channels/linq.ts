@@ -1,6 +1,20 @@
-import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
+import { defaultLinqAuth, linqChannel, type LinqChannelConfig } from "eve/channels/linq";
+
+import { browserChannelEvents } from "../lib/browser-runtime";
+
+export const linqBrowserEvents: NonNullable<LinqChannelConfig["events"]> = {
+  ...browserChannelEvents,
+  async "session.failed"(event, channel) {
+    try {
+      await browserChannelEvents["session.failed"](event);
+    } finally {
+      await channel.thread?.post("This session could not recover from an error. Start a new conversation to continue.");
+    }
+  },
+};
 
 export default linqChannel({
+  events: linqBrowserEvents,
   credentials: {
     apiKey: () => requiredEnvironmentValue("LINQ_API_KEY"),
     signingSecret: () => requiredEnvironmentValue("LINQ_WEBHOOK_SECRET"),

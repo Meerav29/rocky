@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  browserChannelEvents,
   closeBrowserRuntime,
   hasBrowserRuntime,
   runBrowserOperation,
@@ -13,7 +14,7 @@ import {
   contextStorage,
 } from "../node_modules/eve/dist/src/context/container.js";
 
-// Eve 0.47.6 has no public test-context helper. Use its installed container to
+// Use the installed Eve context container to
 // verify that Bell and the compiled package share real Eve state across imports.
 // Only browser I/O is stubbed; no provider credentials are needed.
 
@@ -52,7 +53,7 @@ describe("Bell's compiled Browsie workspace dependency", () => {
 
     await lifecycle.events!["turn.completed"]!({} as never, context());
     expect(hasBrowserRuntime(sessionId)).toBe(true);
-    await lifecycle.events!["session.completed"]!({} as never, context());
+    await browserChannelEvents["session.completed"]({}, undefined, context());
     expect(closeBrowser).toHaveBeenCalledOnce();
     expect(hasBrowserRuntime(sessionId)).toBe(false);
   }));

@@ -71,7 +71,7 @@ export function beginOAuth(): Response {
     scope: SCOPE, state, code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     code_challenge_method: "S256",
   }).toString();
-  return new Response(null, { status: 302, headers: { Location: url.href, "Set-Cookie": cookie(seal(transaction)) } });
+  return new Response(null, { status: 302, headers: { Location: url.href, "Set-Cookie": cookie(seal(transaction)), "Cache-Control": "no-store" } });
 }
 
 function invalid(): Response {
@@ -86,7 +86,7 @@ export async function completeOAuth(request: Request): Promise<Response> {
     const code = input.get("code");
     const state = input.get("state");
     const transaction = readTransaction(request);
-    if (!code || !state) return invalid();
+    if (input.has("error") || !code || !state) return invalid();
     const supplied = Buffer.from(state);
     const expected = Buffer.from(transaction.state);
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return invalid();

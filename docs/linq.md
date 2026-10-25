@@ -71,9 +71,10 @@ still need a reachable HTTPS application host. See
 4. For optional human handoff, set `BELL_PUBLIC_URL` to Bell's reachable origin and
    `BELL_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
    link works only on the computer running Bell; a phone needs the deployed HTTPS origin.
-   Keep handoff links private because the token grants control of that browser until expiry.
+   Keep handoff links private: they grant browser control. Token expiry prevents reopening
+   the link but does not revoke an already-open Live View; end the browser session when done.
 
-5. Use persistent storage for Bell's Context metadata and vault data on a single-instance
+5. Use persistent storage for Bell's Context metadata on a single-instance
    host, or configure durable shared storage before a multi-instance/serverless deployment.
    Hosted 1Password access requires a scoped `OP_SERVICE_ACCOUNT_TOKEN`; `OP_ACCOUNT`
    desktop authorization works only on the machine running the 1Password app. Keep all

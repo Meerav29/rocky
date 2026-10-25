@@ -1,6 +1,6 @@
 import { defineHook, type HookEvent } from "eve/hooks";
 
-import { closeBrowserRuntime } from "../lib/browser-runtime";
+import { closeBrowserRuntime, resumeBrowserAfterHumanInput } from "../lib/browser-runtime";
 import { applyTaskEvent, taskState } from "../lib/task-state";
 
 const update = (event: HookEvent, ctx: { session: { id: string } }) =>
@@ -14,7 +14,14 @@ export default defineHook({
   events: {
     "session.started": update,
     "turn.started": update,
-    "message.received": update,
+    "message.received": (event, ctx) => {
+      taskState.update((current) => {
+        const next = applyTaskEvent(current, event, ctx.session.id);
+        if (next !== current && current.status === "waiting_for_user")
+          resumeBrowserAfterHumanInput(ctx.session.id);
+        return next;
+      });
+    },
     "step.started": update,
     "input.requested": update,
     "input.resolved": update,

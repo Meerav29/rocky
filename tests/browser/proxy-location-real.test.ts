@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
 
 const live =
-  process.env.BROWSIE_LIVE_PROXY_LOCATION === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
+  process.env.BELL_LIVE_PROXY_LOCATION === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
 
 describe("opt-in live proxy location", () => {
   it.runIf(live)(
@@ -15,7 +15,7 @@ describe("opt-in live proxy location", () => {
         traces: [],
         browser: { provider: "not-started", status: "idle" },
       };
-      const browser = new BrowsieBrowserSession(state, {
+      const browser = new BrowserSession(state, {
         proxyLocation: {
           country: "US",
           state: "CA",

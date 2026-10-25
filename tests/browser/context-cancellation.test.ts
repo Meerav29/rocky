@@ -4,19 +4,30 @@ vi.mock("../../server/browser/agent-contexts.js", () => ({
   createAgentContext: mocks.create, isDraftAgentContext: mocks.draft, promoteAgentContext: mocks.promote,
   ensureAgentContext: vi.fn(), listAgentContexts: vi.fn(), selectAgentContext: vi.fn(),
 }));
-import { BrowsieBrowserSession } from "../../server/browser/browser-session";
-import { createBrowserContext, closeBrowserRuntime, runBrowserOperation, runCancelableBrowserWork, saveBrowserContext } from "../../agent/lib/browser-runtime";
+import { BrowserSession } from "../../server/browser/browser-session";
+import { createBrowserContext, closeBrowserRuntime, runBrowserOperation, runCancelableBrowserWork, saveBrowserContext, selectBrowserContext } from "../../agent/lib/browser-runtime";
 import { taskState } from "../../agent/lib/task-state";
 import { ContextContainer, contextStorage } from "../../node_modules/eve/dist/src/context/container.js";
 
 afterEach(() => { vi.restoreAllMocks(); vi.resetAllMocks(); vi.useRealTimers(); });
 describe("Context cancellation", () => {
+  it("does not lose the previous hosted browser when selecting a Context in a fresh worker", () =>
+    contextStorage.run(new ContextContainer(), async () => {
+      taskState.update(current => ({ ...current, browser: {
+        lifecycle: "active", sessionId: "hosted-browser", contextId: "current-context",
+      } }));
+      await expect(selectBrowserContext("fresh-worker", "next-context")).rejects.toThrow("Save or close");
+      expect(taskState.get().browser).toMatchObject({
+        sessionId: "hosted-browser", contextId: "current-context",
+      });
+    }));
+
   it("does not open a replacement browser after a canceled remote Context creation finishes", () =>
     contextStorage.run(new ContextContainer(), async () => {
       const id = "context-cancellation", controller = new AbortController();
       let resolve!: (value: { id: string; name: string }) => void;
       mocks.create.mockReturnValue(new Promise(done => { resolve = done; }));
-      const importCookies = vi.spyOn(BrowsieBrowserSession.prototype, "importCookies").mockResolvedValue();
+      const importCookies = vi.spyOn(BrowserSession.prototype, "importCookies").mockResolvedValue();
       await runBrowserOperation(id, async browser => {
         vi.spyOn(browser, "hasStarted").mockReturnValue(true);
         vi.spyOn(browser, "start").mockResolvedValue();

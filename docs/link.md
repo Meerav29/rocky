@@ -19,13 +19,12 @@ The Eve catalog's static-token quick start is not Bell's configuration.
 3. Provide PostgreSQL and set these server-only environment variables:
 
    ```dotenv
-   BROWSIE_PUBLIC_URL=https://<bell-host>
+   BELL_PUBLIC_URL=https://<bell-host>
    DATABASE_URL=postgresql://<user>:<password>@<host>/<database>
    LINK_CLIENT_ID=<registered client ID>
    LINK_CLIENT_SECRET=<registered client secret>
    STRIPE_PUBLISHABLE_KEY=<your Stripe publishable key>
    LINK_TOKEN_ENCRYPTION_KEY=<base64 encryption key>
-   BROWSIE_LOG_SESSION=false
    ```
 
    Generate the encryption key once with `openssl rand -base64 32`. Keep it stable across
@@ -45,7 +44,7 @@ The Eve catalog's static-token quick start is not Bell's configuration.
    `/eve/v1/connections/.../callback/...` routes without an interactive login wall. Opaque OAuth
    state and the framework callback capability protect these routes. Keep the existing web and
    session-control access restrictions. Bell forwards Eve's callback capability through
-   `BROWSIE_PUBLIC_URL`, even when Eve generated it on an internal development port or a
+   `BELL_PUBLIC_URL`, even when Eve generated it on an internal development port or a
    different Vercel project domain. Route that public origin to this same Bell deployment.
 
 Configuration and database connections load only when Link is used. Browsing and builds do not
@@ -60,16 +59,18 @@ Keep consent links private: possession allows completing the connection for the 
 sender. Denial or expiry ends the attempt; ask Bell for a new link when ready.
 
 For checkout, give Bell the merchant, item, quantity, and budget. Bell confirms the final total,
-including shipping and tax. Eve asks for confirmation before creating a spend request. Link
-then provides a separate purchase approval URL. Approve there, then text Bell to continue.
+including shipping and tax. When you request a Link spend request, Eve asks for confirmation
+before creating it. Link provides a separate approval URL. Bell can check that request's
+status, but approval does not complete a purchase.
 
-Bell retrieves the same spend request to verify approval before obtaining credentials. It also
-checks that the actual Browserbase session has logging disabled. If a browser was started with
-logging enabled, set `BROWSIE_LOG_SESSION=false` and restart Bell. Then ask Bell to reopen and
-revalidate checkout in the same text conversation. Bell replaces an unsafe persisted browser;
-the replacement may need to navigate to checkout again.
-An issued credential is not proof of purchase: Bell must observe the merchant's result and
-check order state before retrying an uncertain submission.
+Payment entry is a human step. Bell sends a browser handoff link and waits while you complete
+checkout with your own payment method. Bell cannot retrieve or fill Link-issued card numbers,
+CVCs, or payment tokens. Do not send payment credentials in chat. After you return, Bell checks
+the merchant's receipt before reporting success or retrying an uncertain submission. A Link
+approval is not evidence that the merchant used that request.
+
+Browserbase session logging and recording are disabled. Do not capture screenshots while
+payment details are visible.
 
 Text **“Disconnect my Link wallet.”** After confirmation, Bell blocks token resolution,
 invalidates pending consent attempts, and revokes the remote grant before removing its tokens.
@@ -122,18 +123,22 @@ DELETE FROM bell_link_oauth_attempts WHERE expires_at < now() - interval '1 day'
 ```
 
 PostgreSQL here stores Link state only. Eve still needs durable workflow storage to resume
-parked turns after host replacement, and Bell's Context/vault files need their documented
+parked turns after host replacement, and Bell's Context metadata file needs its documented
 storage. This change does not make the rest of Bell ready for arbitrary multi-instance hosting
 or unrelated users.
 
 ## Transcript boundary
 
-OAuth tokens and client secrets never enter tool arguments or conversational output. The native
-Link extension **does return payment credentials in tool results** when requested; those results
-and browser fill arguments may appear in persisted Eve events and model context. Restrict
-transcript access to the trusted operator, apply your host's retention/deletion policy, protect
-backups, and avoid screenshots while credentials are visible. Disabling Browserbase logging
-does not disable Eve event persistence.
+OAuth tokens and client secrets never enter tool arguments or conversational output. Bell
+overrides the native extension's credential retrieval: the tool accepts only a spend-request ID,
+and every spend-request result is projected to an explicit metadata allowlist before Eve can
+persist it. Card and payment-token fields, including unexpected provider fields, are discarded.
+The mounted purchase skill uses the same human checkout procedure.
+
+Wallet metadata and shipping addresses are still personal data. Restrict transcripts to the
+trusted operator and apply your host's retention/deletion policy. Disabled Browserbase logging
+does not disable Eve event persistence. Upgrading does not remove credentials from transcripts
+created by older versions; delete those transcripts and their backups under your retention policy.
 
 ## Verify
 
@@ -141,7 +146,7 @@ does not disable Eve event persistence.
 PostgreSQL database to include persistence tests. The suite creates and drops a unique schema;
 it never uses `DATABASE_URL` or calls Link. CI provides PostgreSQL automatically. Tests cover
 encryption, identity isolation, callbacks, restart recovery, concurrent refresh, revocation,
-and checkout guards.
+spend-request path validation, and the metadata-only payment boundary.
 
 For an operator-run live smoke test, text “List my Link payment methods,” complete consent, and
 verify the response arrives in the same chat. Send a follow-up to confirm grant reuse, then

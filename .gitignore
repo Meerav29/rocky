@@ -1,7 +1,9 @@
 node_modules/
 .next/
 .eve/
-.browsie/
+.bell/
+contexts.json
+*.enc.json
 .output/
 .vercel/
 .env*

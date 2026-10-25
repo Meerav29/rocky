@@ -25,12 +25,12 @@ export function linkConfig(): LinkConfig {
     if (!value) throw new LinkSetupError("missing_configuration", name);
     return value;
   };
-  const origin = required("BROWSIE_PUBLIC_URL");
+  const origin = required("BELL_PUBLIC_URL");
   let url: URL;
-  try { url = new URL(origin); } catch { throw new LinkSetupError("invalid_configuration", "BROWSIE_PUBLIC_URL"); }
+  try { url = new URL(origin); } catch { throw new LinkSetupError("invalid_configuration", "BELL_PUBLIC_URL"); }
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (url.origin !== origin || (url.protocol !== "https:" && !(loopback && url.protocol === "http:")))
-    throw new LinkSetupError("invalid_configuration", "BROWSIE_PUBLIC_URL");
+    throw new LinkSetupError("invalid_configuration", "BELL_PUBLIC_URL");
   const encodedKey = required("LINK_TOKEN_ENCRYPTION_KEY");
   const encryptionKey = Buffer.from(encodedKey, "base64");
   if (encryptionKey.length !== 32 || encryptionKey.toString("base64") !== encodedKey)

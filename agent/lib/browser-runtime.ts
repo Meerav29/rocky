@@ -6,7 +6,7 @@ import {
   promoteAgentContext,
   selectAgentContext,
 } from "../../server/browser/agent-contexts.js";
-import { BrowsieBrowserSession, CaptchaHandoffError } from "../../server/browser/browser-session.js";
+import { BrowserSession, CaptchaHandoffError } from "../../server/browser/browser-session.js";
 import type { BrowserProxyLocation, ConversationState, TraceEvent } from "../../server/browser/types.js";
 import { runWithCancellation } from "./cancellation";
 import {
@@ -20,10 +20,10 @@ import {
   type DurableCaptchaRecord,
 } from "./task-state";
 
-type BrowserOperation<T> = (browser: BrowsieBrowserSession) => Promise<T>;
+type BrowserOperation<T> = (browser: BrowserSession) => Promise<T>;
 
 interface BrowserRuntime {
-  browser: BrowsieBrowserSession;
+  browser: BrowserSession;
   state: ConversationState;
   idleTimer?: ReturnType<typeof setTimeout>;
   closing?: Promise<void>;
@@ -173,6 +173,10 @@ export function hasBrowserRuntime(sessionId: string): boolean {
   return runtimes.has(sessionId);
 }
 
+export function resumeBrowserAfterHumanInput(sessionId: string): void {
+  runtimes.get(sessionId)?.browser.resumeAfterHumanInput();
+}
+
 export async function createBrowserContext(
   sessionId: string,
   name: string,
@@ -245,7 +249,7 @@ export async function selectBrowserContext(
   contextId: string,
 ): Promise<{ id: string; name: string; selected: true }> {
   const runtime = runtimes.get(sessionId);
-  if (runtime?.browser.hasStarted()) {
+  if (runtime?.browser.hasStarted() || taskState.get().browser.sessionId) {
     throw new Error("Save or close the current browser before you select another Context.");
   }
   await selectAgentContext(contextId);
@@ -311,10 +315,11 @@ function createRuntimeBrowser(
   state: ConversationState,
   contextId?: string,
   proxyLocation?: BrowserProxyLocation,
-): BrowsieBrowserSession {
-  return new BrowsieBrowserSession(state, {
+): BrowserSession {
+  return new BrowserSession(state, {
     contextId,
     proxyLocation,
+    captcha: taskState.get().captcha,
     ensureContext: async (currentContextId) => {
       const context = await ensureAgentContext(sessionId, currentContextId);
       state.browser.contextId = context.id;
@@ -334,7 +339,7 @@ function defaultContextName(record: { title: string }): string {
 function scheduleIdleClose(sessionId: string, runtime: BrowserRuntime): void {
   if (runtime.idleTimer) clearTimeout(runtime.idleTimer);
   if (runtime.closing || runtimes.get(sessionId) !== runtime) return;
-  const configured = Number(process.env.BROWSIE_BROWSER_IDLE_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
+  const configured = Number(process.env.BELL_BROWSER_IDLE_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
   const timeoutMs =
     Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_IDLE_TIMEOUT_MS;
   runtime.idleTimer = setTimeout(() => {

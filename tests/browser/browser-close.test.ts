@@ -14,7 +14,7 @@ vi.mock("@browserbasehq/sdk", () => {
 });
 
 import Browserbase from "@browserbasehq/sdk";
-import { BrowsieBrowserSession } from "../../server/browser/browser-session";
+import { BrowserSession } from "../../server/browser/browser-session";
 import type { ConversationState } from "../../server/browser/types";
 import { browserChannelEvents, closeBrowserRuntime, hasBrowserRuntime, runBrowserOperation } from "../../agent/lib/browser-runtime";
 import { taskState } from "../../agent/lib/task-state";
@@ -26,7 +26,7 @@ function fixture() {
     traces: [],
     browser: { provider: "browserbase", status: "idle", sessionId: "saved-browser" },
   };
-  return { state, session: new BrowsieBrowserSession(state) };
+  return { state, session: new BrowserSession(state) };
 }
 
 afterEach(() => vi.resetAllMocks());

@@ -78,7 +78,7 @@ export async function ensureAgentContext(
       current.expiresAt &&
       Date.parse(current.expiresAt) <= now.getTime()
     ) {
-      await deleteContext(currentContextId).catch(() => undefined);
+      await deleteContext(currentContextId);
       await metadata.remove(currentContextId);
     } else {
       try {
@@ -93,7 +93,8 @@ export async function ensureAgentContext(
           status: current?.status === "draft" ? "draft" : "saved",
         };
       } catch (error) {
-        if (current?.status !== "draft") throw error;
+        if (current?.status !== "draft" || !(error instanceof Browserbase.APIError) || error.status !== 404)
+          throw error;
         await metadata.remove(currentContextId);
       }
     }
@@ -160,7 +161,12 @@ async function deleteExpiredDraftContexts(now: Date): Promise<void> {
     );
   });
   for (const [id] of expired) {
-    await deleteContext(id).catch(() => undefined);
+    try {
+      await deleteContext(id);
+    } catch {
+      // Keep the record so another request can retry deleting the remote data.
+      continue;
+    }
     await metadata.remove(id);
   }
 }
@@ -177,7 +183,7 @@ async function deleteContext(id: string): Promise<void> {
 }
 
 function draftTtlMs(): number {
-  const configured = Number(process.env.BROWSIE_DRAFT_CONTEXT_TTL_MS);
+  const configured = Number(process.env.BELL_DRAFT_CONTEXT_TTL_MS);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_DRAFT_TTL_MS;
 }
 

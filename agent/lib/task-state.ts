@@ -51,8 +51,8 @@ export interface DurableTaskRecord {
   createdAt: string;
   updatedAt: string;
 }
-// Keep the persisted key so existing Bell sessions retain their browser and Context.
-export const taskState = defineState<DurableTaskRecord>("browsie.task.v1", () => ({
+// Changing this namespace requires retiring conversations from the previous deployment.
+export const taskState = defineState<DurableTaskRecord>("bell.browser.v1", () => ({
   version: 1,
   taskId: "",
   sessionId: "",
@@ -90,9 +90,18 @@ export function applyTaskEvent(
     processedEventIds: id ? [...next.processedEventIds, id].slice(-2_000) : next.processedEventIds,
     updatedAt: at,
   };
-  if (event.type === "message.received" && next.title === "New task") {
-    const text = safeText(event.data?.message ?? event.data?.text);
-    if (text) next = { ...next, title: text.slice(0, 64) };
+  if (event.type === "message.received") {
+    if (next.title === "New task") {
+      const text = safeText(event.data?.message ?? event.data?.text);
+      if (text) next = { ...next, title: text.slice(0, 64) };
+    }
+    // A reply after handoff permits a fresh observation of the existing page.
+    // It does not assert that the challenge succeeded.
+    if (next.status === "waiting_for_user") {
+      next = { ...next, status: "running", activeStep: "resuming", waitReason: undefined };
+      if (next.captcha?.status === "errored" || next.captcha?.status === "timed_out")
+        next = { ...next, captcha: { ...next.captcha, status: "idle" } };
+    }
   } else if (event.type === "turn.started")
     next = captchaBlocksGeneric(next)
       ? next
@@ -211,7 +220,7 @@ export function reconcileCaptchaAfterRestart(
   });
 }
 export function captchaTimeoutMs(): number {
-  const value = Number(process.env.BROWSIE_CAPTCHA_TIMEOUT_MS ?? 30_000);
+  const value = Number(process.env.BELL_CAPTCHA_TIMEOUT_MS ?? 30_000);
   return Number.isFinite(value) && value > 0 ? value : 30_000;
 }
 function captchaBlocksGeneric(record: DurableTaskRecord): boolean {
@@ -319,6 +328,7 @@ export function recordTaskBrowserContext(
 export function closeTaskBrowser(record: DurableTaskRecord): DurableTaskRecord {
   return {
     ...record,
+    captcha: undefined,
     browser: {
       ...record.browser,
       sessionId: undefined,

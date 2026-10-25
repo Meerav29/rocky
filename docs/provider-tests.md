@@ -16,7 +16,7 @@ Configure `BROWSERBASE_API_KEY` and either `OP_SERVICE_ACCOUNT_TOKEN` or desktop
 through `OP_ACCOUNT`. From the repository root:
 
 ```sh
-BROWSIE_LIVE_ONEPASSWORD=1 BROWSIE_LOG_SESSION=false STAGEHAND_BROWSER=browserbase \
+BELL_LIVE_ONEPASSWORD=1 STAGEHAND_BROWSER=browserbase \
   node --env-file-if-exists=.env --env-file-if-exists=.env.local \
   node_modules/vitest/vitest.mjs run tests/browser/onepassword-login-real.test.ts
 ```
@@ -30,7 +30,7 @@ Without the dedicated fixture, report this check as unverified even if vault lis
 With the Browserbase environment loaded, run:
 
 ```sh
-BROWSIE_LIVE_CONTEXT=1 BROWSIE_LOG_SESSION=false STAGEHAND_BROWSER=browserbase pnpm exec vitest run tests/browser/context-save-real.test.ts
+BELL_LIVE_CONTEXT=1 STAGEHAND_BROWSER=browserbase pnpm exec vitest run tests/browser/context-save-real.test.ts
 ```
 
 This writes a synthetic example.com cookie, releases the writer, starts a reader with the

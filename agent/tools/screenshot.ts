@@ -1,4 +1,4 @@
-import { defineTool, toolOutput } from "eve/tools";
+import { defineTool, toolOutput, toolOutputPart } from "eve/tools";
 import { z } from "zod";
 
 import { runBrowserOperation, runCancelableBrowserWork } from "../lib/browser-runtime";
@@ -13,9 +13,10 @@ export default defineTool({
     );
   },
   toModelOutput(output) {
-    return toolOutput.json({
-      mediaType: output.result.mediaType,
-      url: output.result.url,
-    });
+    if (!output.result.data) return toolOutput.json(output.result);
+    return toolOutput.content([
+      toolOutputPart.text(`Screenshot of ${output.result.url}`),
+      toolOutputPart.file(output.result.data, { mediaType: output.result.mediaType }),
+    ]);
   },
 });

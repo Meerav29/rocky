@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browserbase, localBrowser } from "@browserbasehq/stagehand";
-import { BrowsieBrowserSession, browserbaseLaunchOptions } from "../../server/browser/browser-session";
+import { BrowserSession, browserbaseLaunchOptions } from "../../server/browser/browser-session";
 import type { ConversationState } from "../../server/browser/types";
 
-function fixture(loggingDisabled = true) {
+function fixture() {
   const state: ConversationState = {
     id: "shared-test",
     traces: [],
     browser: { provider: "not-started", status: "idle" },
   };
-  const session = new BrowsieBrowserSession(state);
+  const session = new BrowserSession(state);
   const page = {
     url: async () => "https://example.com/",
     title: async () => "Example",
@@ -20,7 +20,6 @@ function fixture(loggingDisabled = true) {
     "gateCaptcha",
   ).mockResolvedValue();
   Object.assign(session, {
-    sessionLogsDisabled: loggingDisabled,
     remoteSessionId: "private-session",
     browser: { context: { activePage: async () => page } },
     browserbase: {
@@ -50,14 +49,6 @@ describe("shared hosted-page integration boundary", () => {
     expect(state.browser.url).toBe("https://example.com/");
     expect(JSON.stringify(state)).not.toContain("private-connection");
   });
-  it("refuses credential integrations when the session may record network headers", async () => {
-    const { session } = fixture(false);
-    const operation = vi.fn();
-    await expect(session.withHostedPage(new AbortController().signal, operation)).rejects.toThrow(
-      "BROWSIE_LOG_SESSION=false",
-    );
-    expect(operation).not.toHaveBeenCalled();
-  });
   it("does no work for an already-cancelled call", async () => {
     const { session } = fixture();
     const operation = vi.fn();
@@ -75,11 +66,12 @@ describe("shared hosted-page integration boundary", () => {
       session.withHostedPage(new AbortController().signal, async () => "next"),
     ).resolves.toBe("next");
   });
-  it.each([undefined, "false"])("disables hosted recording by default or when requested: %s", value => {
-    vi.stubEnv("BROWSIE_LOG_SESSION", value);
+  it("always disables hosted recording", () => {
     const options = browserbaseLaunchOptions("test-key");
     expect(options.browserSettings.logSession).toBe(false);
+    expect(options.browserSettings.recordSession).toBe(false);
     expect(options.userMetadata.networkLogging).toBe("false");
+    expect(options.userMetadata.sessionRecording).toBe("false");
   });
 
   it.each([undefined, { country: "US" }])("keeps Verified and managed proxies enabled with location %j", (location) => {
@@ -104,7 +96,7 @@ describe("shared hosted-page integration boundary", () => {
       id: "verified-retry-test", traces: [],
       browser: { provider: "not-started", status: "idle" },
     };
-    const session = new BrowsieBrowserSession(state);
+    const session = new BrowserSession(state);
     const failure = expect(session.start()).rejects.toThrow("Synthetic launch failure");
     await vi.runAllTimersAsync();
     await failure;

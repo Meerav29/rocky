@@ -1,10 +1,10 @@
 import Browserbase from "@browserbasehq/sdk";
 import { describe, expect, it } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
 
-const live = process.env.BROWSIE_LIVE_CONTEXT === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
+const live = process.env.BELL_LIVE_CONTEXT === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
 
 describe("opt-in live Context save", () => {
   it.runIf(live)(
@@ -14,7 +14,7 @@ describe("opt-in live Context save", () => {
       const sdk = new Browserbase({ apiKey });
       const marker = `bell-${Date.now()}`;
       const remote = await sdk.contexts.create({
-        name: `Browsie test ${Date.now()}`,
+        name: `Bell test ${Date.now()}`,
         ...(process.env.BROWSERBASE_PROJECT_ID
           ? { projectId: process.env.BROWSERBASE_PROJECT_ID }
           : {}),
@@ -24,11 +24,11 @@ describe("opt-in live Context save", () => {
         traces: [],
         browser: { provider: "not-started", status: "idle" },
       });
-      let writer: BrowsieBrowserSession | undefined;
-      let reader: BrowsieBrowserSession | undefined;
+      let writer: BrowserSession | undefined;
+      let reader: BrowserSession | undefined;
       try {
         const writerState = state("context-capture-writer");
-        writer = new BrowsieBrowserSession(writerState, {
+        writer = new BrowserSession(writerState, {
           ensureContext: async () => ({ id: remote.id, status: "draft" }),
         });
         await writer.importCookies(
@@ -48,7 +48,7 @@ describe("opt-in live Context save", () => {
         await writer.close();
         await new Promise((resolve) => setTimeout(resolve, 5_000));
 
-        reader = new BrowsieBrowserSession(state("context-capture-reader"), {
+        reader = new BrowserSession(state("context-capture-reader"), {
           contextId: remote.id,
         });
         await reader.run([{ action: "goto", url: "https://example.com/" }]);

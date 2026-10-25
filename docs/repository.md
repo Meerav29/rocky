@@ -34,19 +34,11 @@ Browser tools must use `runBrowserOperation` and `runCancelableBrowserWork` from
 under the same operation lock. Keep credentials and browser connection URLs out of tool results.
 See [browser configuration and credential handling](browser-runtime.md).
 
-## Source provenance
+## License and ownership
 
-The browser implementation originated in `projects/browsie` from
-[browserbase/cookbook at 93483ce09eacb4d08014bb49c8d701cb77943186](https://github.com/browserbase/cookbook/tree/93483ce09eacb4d08014bb49c8d701cb77943186/projects/browsie),
-the exact submodule revision Bell used before importing that source. The upstream copyright
-and MIT terms are retained in [licenses/browsie-MIT.txt](../licenses/browsie-MIT.txt).
-Bell maintains the runtime locally; upstream changes do not arrive automatically.
-
-The standalone Browsie app, its second Eve agent, management screens, and application-only tests
-have been removed. The browser implementation and its relevant tests now live in Bell's root
-source tree. Existing `BROWSIE_*` environment names, `.browsie` storage paths, and the
-`browsie.task.v1` durable state key remain compatible with existing Bell deployments and sessions.
-They are compatibility identifiers, not a separate application dependency.
+Bell maintains its browser implementation directly in this repository. There is no submodule
+or separately maintained application to install. The root [MIT license](../LICENSE) preserves
+the Browserbase copyright and license terms covering the browser source.
 
 ## Browser retirement
 

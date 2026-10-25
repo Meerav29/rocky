@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
 
-const live = process.env.BROWSIE_REAL_CAPTCHA === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
+const live = process.env.BELL_REAL_CAPTCHA === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
 
 describe("opt-in real Browserbase CAPTCHA solve", () => {
   it.runIf(live)(
@@ -14,7 +14,7 @@ describe("opt-in real Browserbase CAPTCHA solve", () => {
           traces: [],
           browser: { provider: "not-started", status: "idle" },
         },
-        session = new BrowsieBrowserSession(state);
+        session = new BrowserSession(state);
       try {
         await session.run([
           { action: "goto", url: "https://google.com/recaptcha/api2/demo" },

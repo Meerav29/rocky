@@ -19,12 +19,12 @@ const target = {
 describe("browser handoff", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    delete process.env.BROWSIE_HANDOFF_SECRET;
-    delete process.env.BROWSIE_PUBLIC_URL;
+    delete process.env.BELL_HANDOFF_SECRET;
+    delete process.env.BELL_PUBLIC_URL;
   });
 
   it("allows the same-origin Live View redirect while retaining private response headers", async () => {
-    vi.stubEnv("BROWSIE_HANDOFF_SECRET", secret);
+    vi.stubEnv("BELL_HANDOFF_SECRET", secret);
     const token = issueBrowserHandoffToken(target, { secret });
     const response = await GET(new Request("https://bell.example"), {
       params: Promise.resolve({ token }),
@@ -40,7 +40,7 @@ describe("browser handoff", () => {
   });
 
   it("rejects invalid and expired page tokens before rendering a frame", async () => {
-    vi.stubEnv("BROWSIE_HANDOFF_SECRET", secret);
+    vi.stubEnv("BELL_HANDOFF_SECRET", secret);
     for (const [token, status] of [
       ["invalid", 404],
       [issueBrowserHandoffToken(target, { secret, now: 1_000, ttlMs: 1_000 }), 410],

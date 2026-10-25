@@ -19,7 +19,6 @@ BASELAYER_PRINCIPAL_REF=<current verified principal from the same organization>
 BASELAYER_ALLOWED_ORIGINS=https://bell-stack-demo-site.vercel.app
 BELL_DEMO_URL=https://bell-stack-demo-site.vercel.app/protected
 STAGEHAND_BROWSER=browserbase
-BROWSIE_LOG_SESSION=false
 ```
 
 Keep the OpenAI and Browserbase credentials already used by Bell. For the phone demo, also keep

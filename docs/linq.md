@@ -1,6 +1,6 @@
 # Text Bell through Linq
 
-Bell's assigned demo line is **+12025550100** (`+12025550100` in configuration).
+Configure Bell with a receiving phone number from your own Linq account.
 Linq carries iMessage and SMS. [Link wallet OAuth and checkout](link.md) use this channel's
 verified sender identity and require separate configuration.
 
@@ -33,7 +33,7 @@ still need a reachable HTTPS application host. See
    ```dotenv
    LINQ_API_KEY=<API token for the Linq account that owns the line>
    LINQ_WEBHOOK_SECRET=<signing secret from the webhook subscription>
-   BELL_LINQ_PHONE_NUMBER=+12025550100
+   BELL_LINQ_PHONE_NUMBER=<your Linq receiving number, starting with + and country code>
    BELL_LINQ_ALLOWED_SENDERS=<your personal phone number, starting with + and country code>
    ```
 
@@ -42,7 +42,7 @@ still need a reachable HTTPS application host. See
    For this single-operator demo, allow only the operator's numbers because saved vault and
    browser Context data are shared. Group chats and iMessage email handles are not supported
    by this phone-only policy. Bell uses `BELL_LINQ_ALLOWED_SENDERS`; the former
-   `BROWSIE_LINQ_ALLOWED_USER_IDS` setting has no effect.
+   `BELL_LINQ_ALLOWED_USER_IDS` setting has no effect.
 
 2. Deploy Bell behind your chosen HTTPS application origin. Protect the web UI,
    session-control routes, and any administration endpoints with application authentication.
@@ -57,7 +57,7 @@ still need a reachable HTTPS application host. See
    | --- | --- |
    | Target URL | `https://<your reachable Bell host>/eve/v1/linq?version=2026-02-03` |
    | Event | `message.received` |
-   | Phone-number filter | `+12025550100` |
+   | Phone-number filter | Your `BELL_LINQ_PHONE_NUMBER` receiving line |
 
    Save the subscription's signing secret as `LINQ_WEBHOOK_SECRET`, then restart Bell. The target
    is the Bell application. Best Buy is the website Bell visits, so do not enter it as the webhook
@@ -68,8 +68,8 @@ still need a reachable HTTPS application host. See
    See Linq's [subscription API](https://docs.linqapp.com/channel/imessage/api/resources/webhook_subscriptions/methods/create/)
    and [signed webhook guide](https://docs.linqapp.com/channel/imessage/guides/webhooks/).
 
-4. For optional human handoff, set `BROWSIE_PUBLIC_URL` to Bell's reachable origin and
-   `BROWSIE_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
+4. For optional human handoff, set `BELL_PUBLIC_URL` to Bell's reachable origin and
+   `BELL_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
    link works only on the computer running Bell; a phone needs the deployed HTTPS origin.
    Keep handoff links private because the token grants control of that browser until expiry.
 
@@ -81,7 +81,7 @@ still need a reachable HTTPS application host. See
 
 ## Demo from your phone
 
-Text the assigned line from an allowed personal number:
+Text your configured Linq line from an allowed personal number:
 
 1. "Open https://www.bestbuy.com and tell me the homepage title."
 2. "Take a screenshot of that page."

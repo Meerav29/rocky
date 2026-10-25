@@ -1,22 +1,21 @@
 import { chromium, type Browser } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
 
-const live = process.env.BROWSIE_LIVE_CAPTCHA === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
+const live = process.env.BELL_LIVE_CAPTCHA === "1" && Boolean(process.env.BROWSERBASE_API_KEY);
 afterEach(() => vi.unstubAllEnvs());
 describe("opt-in hosted CAPTCHA marker fixture", () => {
   it.runIf(live)(
     "subscribes before navigation, gates, re-observes, and cleans up",
     async () => {
-      vi.stubEnv("BROWSIE_LOG_SESSION", "false");
       const state: ConversationState = {
         id: "captcha-live-fixture",
         traces: [],
         browser: { provider: "not-started", status: "idle" },
       };
-      const session = new BrowsieBrowserSession(state);
+      const session = new BrowserSession(state);
       let fixtureBrowser: Browser | undefined;
       try {
         const fixture = "https://bell-fixture.invalid/captcha";

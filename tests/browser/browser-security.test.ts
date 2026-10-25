@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session";
+import { BrowserSession } from "../../server/browser/browser-session";
 import type { ConversationState } from "../../server/browser/types";
 
 const login = {
@@ -22,7 +22,7 @@ function fixture() {
     traces: [],
     browser: { provider: "not-started", status: "idle" },
   };
-  const session = new BrowsieBrowserSession(state);
+  const session = new BrowserSession(state);
   let url = "https://shop.example/login";
   const fill = vi.fn<(target: string, value: string) => Promise<void>>().mockResolvedValue();
   const click = vi.fn<(target: string) => Promise<void>>().mockResolvedValue();
@@ -48,7 +48,6 @@ function fixture() {
   Object.assign(session, {
     stagehand: { experimentalBatch: batch },
     browserbase: {},
-    sessionLogsDisabled: true,
   });
   return { session, state, start, batch, page, fill, click, setUrl: (next: string) => { url = next; } };
 }
@@ -59,6 +58,15 @@ afterEach(() => {
 });
 
 describe("vault login credential boundary", () => {
+  it.each(["iframe >> #password", "xpath=/html/body/iframe/input", "/html/body/iframe/input", "(//iframe)/input"])(
+    "rejects selectors that could send credentials into another frame: %s", async passwordTarget => {
+      const { session, start, fill } = fixture();
+      await expect(session.secureLogin({ ...login, passwordTarget })).rejects.toThrow("CSS selectors");
+      expect(start).not.toHaveBeenCalled();
+      expect(fill).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     "http://shop.example/login",
     "https://other.example/login",
@@ -67,14 +75,6 @@ describe("vault login credential boundary", () => {
     const { session, setUrl, fill } = fixture();
     setUrl(url);
     await expect(session.secureLogin(login)).rejects.toThrow("Secure login failed");
-    expect(fill).not.toHaveBeenCalled();
-  });
-
-  it("refuses hosted login when session logging is enabled", async () => {
-    const { session, batch, fill } = fixture();
-    Object.assign(session, { sessionLogsDisabled: false });
-    await expect(session.secureLogin(login)).rejects.toThrow("Secure login failed");
-    expect(batch).not.toHaveBeenCalled();
     expect(fill).not.toHaveBeenCalled();
   });
 
@@ -119,13 +119,6 @@ describe("vault login credential boundary", () => {
 });
 
 describe("browser navigation boundary", () => {
-  it.each(["fill", "type", "select", "press"] as const)("refuses hosted %s when session logging is enabled", async action => {
-    const { session, batch, fill } = fixture();
-    Object.assign(session, { sessionLogsDisabled: false });
-    await expect(session.run([action === "press" ? { action, key: "s" } : { action, target: "#field", value: "synthetic-private" }])).rejects.toThrow("logging");
-    expect(batch).not.toHaveBeenCalled();
-    expect(fill).not.toHaveBeenCalled();
-  });
   it("fills the original values without retaining them in traces", async () => {
     const { session, state, fill } = fixture();
     const values = ["synthetic-credential-2b87e", "4242424242424242"];

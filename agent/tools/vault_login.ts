@@ -1,20 +1,17 @@
 import { defineTool, toolOutput } from "eve/tools";
 import { z } from "zod";
 
-import { nativeVault, onePasswordVault } from "../../server/browser/vault/index.js";
-import { generateTotp } from "../../server/browser/vault/totp.js";
-import type { SecretRef } from "../../server/browser/vault/types.js";
+import { onePasswordVault } from "../../server/browser/vault/onepassword.js";
 import { runBrowserOperation, runCancelableBrowserWork } from "../lib/browser-runtime";
 import { taskState } from "../lib/task-state";
 
 const selector = z.string().min(1).max(500);
 export default defineTool({
   description:
-    "Fill and submit a mapped Login without exposing credentials to the model. Navigate and snapshot first. Pass the opaque item handle plus exact selectors. A successTarget is required to prove login. If this returns waiting_for_user, call human_handoff with reason otp (or captcha for a CAPTCHA challenge), share the returned handoff URL, and end the turn until the user replies done.",
+    "Fill and submit a 1Password Login without exposing credentials to the model. Navigate and snapshot first. Pass its vault and item IDs plus exact CSS selectors in the main page. A successTarget is required to prove login. If this returns waiting_for_user, call human_handoff with reason otp (or captcha for a CAPTCHA challenge), share the returned handoff URL, and end the turn until the user replies done.",
   inputSchema: z.object({
-    provider: z.enum(["native", "onepassword"]),
     itemId: z.string().min(1),
-    vaultId: z.string().optional(),
+    vaultId: z.string().min(1),
     usernameTarget: selector,
     passwordTarget: selector,
     submitTarget: selector,
@@ -24,49 +21,26 @@ export default defineTool({
     totpFlow: z.enum(["same_form", "after_submit"]).default("same_form"),
   }),
   async execute(input, ctx) {
-    const provider = input.provider === "native" ? nativeVault : onePasswordVault;
-    const items = await provider.list(),
-      item = items.find(
-        (candidate) =>
-          candidate.itemId === input.itemId &&
-          (input.provider === "native" || candidate.vaultId === input.vaultId),
-      );
-    if (!item) throw new Error("Vault login handle not found.");
-    const ref = (field: SecretRef["field"]): SecretRef => ({
-      provider: input.provider,
-      itemId: input.itemId,
-      vaultId: input.vaultId,
-      field,
-    });
-    const username = await provider.resolve(ref("username")),
-      password = await provider.resolve(ref("password"));
-    let totp: string | undefined;
-    if (input.totpTarget && (item.fields.totp || input.provider === "onepassword")) {
-      try {
-        const value = await provider.resolve(ref("totp"));
-        totp = input.provider === "onepassword" ? value : generateTotp(value);
-      } catch {
-        totp = undefined;
-      }
-    }
     const output = await runCancelableBrowserWork(ctx.session.id, ctx.abortSignal, () =>
-      runBrowserOperation(ctx.session.id, (browser) =>
-        browser.secureLogin({
-          allowedHosts: item.allowedHosts,
-          username,
-          password,
+      runBrowserOperation(ctx.session.id, async (browser) => {
+        const login = await onePasswordVault.login(input.vaultId, input.itemId);
+        ctx.abortSignal.throwIfAborted();
+        return browser.secureLogin({
+          ...login,
           usernameTarget: input.usernameTarget,
           passwordTarget: input.passwordTarget,
           submitTarget: input.submitTarget,
           successTarget: input.successTarget,
           totpTarget: input.totpTarget,
           otpSubmitTarget: input.otpSubmitTarget,
-          totp,
           totpAfterSubmit: input.totpFlow === "after_submit",
-        }),
-      ),
+        });
+      }),
     );
-    if (output.result.status === "waiting_for_user")
+    if (
+      output.result.status === "waiting_for_user" &&
+      !("reason" in output.result && output.result.reason === "captcha")
+    )
       taskState.update((current) => ({
         ...current,
         status: "waiting_for_user",

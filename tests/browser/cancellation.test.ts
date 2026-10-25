@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { BrowsieCancellationError, runWithCancellation } from "../../agent/lib/cancellation";
+import { BrowserCancellationError, runWithCancellation } from "../../agent/lib/cancellation";
 
 describe("browser operation cancellation", () => {
   it("does not start queued work after cancellation cleanup", async () => {
     const controller = new AbortController(), operation = vi.fn(), cleanup = vi.fn(async () => undefined);
     const pending = runWithCancellation(controller.signal, operation, cleanup);
     controller.abort();
-    await expect(pending).rejects.toBeInstanceOf(BrowsieCancellationError);
+    await expect(pending).rejects.toBeInstanceOf(BrowserCancellationError);
     expect(operation).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledOnce();
   });
@@ -15,7 +15,7 @@ describe("browser operation cancellation", () => {
   it("never starts work for a previously aborted turn", async () => {
     const controller = new AbortController(), operation = vi.fn(), cleanup = vi.fn(async () => undefined);
     controller.abort();
-    await expect(runWithCancellation(controller.signal, operation, cleanup)).rejects.toBeInstanceOf(BrowsieCancellationError);
+    await expect(runWithCancellation(controller.signal, operation, cleanup)).rejects.toBeInstanceOf(BrowserCancellationError);
     expect(operation).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledOnce();
   });
@@ -36,7 +36,7 @@ describe("browser operation cancellation", () => {
     await Promise.resolve();
     expect(cleanup).toHaveBeenCalledOnce();
     releaseCleanup();
-    await expect(work).rejects.toBeInstanceOf(BrowsieCancellationError);
+    await expect(work).rejects.toBeInstanceOf(BrowserCancellationError);
   });
 
   it("runs cleanup only once for one abort signal", async () => {
@@ -50,7 +50,7 @@ describe("browser operation cancellation", () => {
 
     controller.abort();
     controller.abort();
-    await expect(work).rejects.toBeInstanceOf(BrowsieCancellationError);
+    await expect(work).rejects.toBeInstanceOf(BrowserCancellationError);
     expect(cleanup).toHaveBeenCalledOnce();
   });
 

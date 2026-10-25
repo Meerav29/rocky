@@ -36,8 +36,8 @@ export function linkPrincipal(ctx: ToolContext): ConnectionPrincipal {
 }
 
 /** Preserve Eve's authorization pause/resume, then recheck the database before each
- * native SDK request. A step-cached bearer must not bypass a concurrent disconnect,
- * particularly while credential retrieval waits for browser readiness.
+ * native SDK request. A bearer cached earlier in a step must not bypass a
+ * concurrent disconnect from another conversation.
  */
 export function freshLinkContext(ctx: ToolContext): ToolContext {
   return {

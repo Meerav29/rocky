@@ -14,15 +14,15 @@ function request(path: string, init: RequestInit = {}) {
 }
 
 beforeEach(() => {
-  vi.stubEnv("BROWSIE_STUDIO_USERNAME", "operator");
-  vi.stubEnv("BROWSIE_STUDIO_PASSWORD", password);
+  vi.stubEnv("BELL_OPERATOR_USERNAME", "operator");
+  vi.stubEnv("BELL_OPERATOR_PASSWORD", password);
 });
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe("operator authentication", () => {
   it.each(["", "short"])("fails closed with an absent or weak operator password", value => {
-    vi.stubEnv("BROWSIE_STUDIO_PASSWORD", value);
+    vi.stubEnv("BELL_OPERATOR_PASSWORD", value);
     expect(operatorAuth(request("/"))).toBeNull();
   });
 
@@ -36,5 +36,11 @@ describe("operator authentication", () => {
       method: "POST",
       headers: { origin: "https://other.example", "sec-fetch-site": "same-origin" },
     }))).toThrow();
+  });
+
+  it("lets server bearer requests reach the next authentication strategy", () => {
+    expect(operatorAuth(new Request(`${origin}/eve/v1/session`, {
+      method: "POST", headers: { authorization: "Bearer synthetic-token" }, body: "{}",
+    }))).toBeNull();
   });
 });

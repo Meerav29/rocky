@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
-import { onePasswordVault } from "../../server/browser/vault/index.js";
+import { onePasswordVault } from "../../server/browser/vault/onepassword.js";
 
 const live =
-  process.env.BROWSIE_LIVE_ONEPASSWORD === "1" &&
+  process.env.BELL_LIVE_ONEPASSWORD === "1" &&
   Boolean(process.env.BROWSERBASE_API_KEY) &&
   Boolean(process.env.OP_SERVICE_ACCOUNT_TOKEN || process.env.OP_ACCOUNT);
 
@@ -24,20 +24,12 @@ describe("opt-in live 1Password login", () => {
         totp: true,
       });
       if (!item?.vaultId) throw new Error("The test Login item is missing.");
-      const ref = (field: "username" | "password" | "totp") => ({
-          provider: "onepassword" as const,
-          vaultId: item.vaultId,
-          itemId: item.itemId,
-          field,
-        }),
-        username = await onePasswordVault.resolve(ref("username")),
-        password = await onePasswordVault.resolve(ref("password")),
-        state: ConversationState = {
-          id: "live-onepassword-login",
-          traces: [],
-          browser: { provider: "not-started", status: "idle" },
-        },
-        session = new BrowsieBrowserSession(state);
+      const state: ConversationState = {
+        id: "live-onepassword-login",
+        traces: [],
+        browser: { provider: "not-started", status: "idle" },
+      };
+      const session = new BrowserSession(state);
       try {
         await session.run([
           {
@@ -45,12 +37,9 @@ describe("opt-in live 1Password login", () => {
             url: "https://authenticationtest.com/totpChallenge/",
           },
         ]);
-        const totp = await onePasswordVault.resolve(ref("totp"));
+        const login = await onePasswordVault.login(item.vaultId, item.itemId);
         const result = await session.secureLogin({
-          allowedHosts: item.allowedHosts,
-          username,
-          password,
-          totp,
+          ...login,
           usernameTarget: "#email",
           passwordTarget: "#password",
           totpTarget: "#totpmfa",
@@ -63,7 +52,8 @@ describe("opt-in live 1Password login", () => {
         expect(page.tree).toContain("Login Success");
         expect(page.tree).toContain("You are now logged in");
         const visible = JSON.stringify({ result, traces: state.traces });
-        expect([username, password, totp].some((secret) => visible.includes(secret))).toBe(false);
+        expect([login.username, login.password, login.totp]
+          .some((secret) => secret && visible.includes(secret))).toBe(false);
         console.log(
           JSON.stringify(
             {

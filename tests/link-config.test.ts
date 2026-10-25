@@ -57,14 +57,14 @@ describe("Link credential boundary", () => {
   it("requires an exact public origin and a 256-bit server key", () => {
     for (const name of ["DATABASE_URL", "LINK_CLIENT_ID", "LINK_CLIENT_SECRET", "STRIPE_PUBLISHABLE_KEY"])
       vi.stubEnv(name, "test-value");
-    vi.stubEnv("BROWSIE_PUBLIC_URL", "http://127.0.0.1:4320");
+    vi.stubEnv("BELL_PUBLIC_URL", "http://127.0.0.1:4320");
     vi.stubEnv("LINK_TOKEN_ENCRYPTION_KEY", randomBytes(32).toString("base64"));
     expect(linkConfig().redirectUri).toBe("http://127.0.0.1:4320/api/link/oauth/callback");
     for (const value of ["http://bell.example", "https://bell.example/path", "https://user:pass@bell.example"] ) {
-      vi.stubEnv("BROWSIE_PUBLIC_URL", value);
+      vi.stubEnv("BELL_PUBLIC_URL", value);
       expect(() => linkConfig()).toThrow();
     }
-    vi.stubEnv("BROWSIE_PUBLIC_URL", "https://bell.example");
+    vi.stubEnv("BELL_PUBLIC_URL", "https://bell.example");
     vi.stubEnv("LINK_TOKEN_ENCRYPTION_KEY", "not-a-key");
     expect(() => linkConfig()).toThrow("LINK_TOKEN_ENCRYPTION_KEY");
     expect(hash("verifier")).toMatch(/^[A-Za-z0-9_-]{43}$/);

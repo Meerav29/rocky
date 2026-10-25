@@ -38,14 +38,13 @@ export interface BrowserRecoveryReport {
 
 const DISCOVERY_HOSTS = ["google.", "bing.com", "duckduckgo.com", "search.brave.com", "yahoo.com"];
 
-export class BrowsieBrowserSession {
+export class BrowserSession {
   private stagehand?: Stagehand;
   private browser?: StagehandBrowser;
   private browserbase?: Browserbase;
   private remoteSessionId?: string;
   private startPromise?: Promise<void>;
   private closeRequested = false;
-  private sessionLogsDisabled = false;
   private operationTail: Promise<void> = Promise.resolve();
   private xpathMap: Record<string, string> = {};
   private readonly visitedOrigins = new Set<string>();
@@ -65,8 +64,18 @@ export class BrowsieBrowserSession {
       ensureContext?: (
         currentContextId?: string,
       ) => Promise<{ id: string; status: "draft" | "saved" }>;
+      captcha?: { status: "idle" | "solving" | "solved" | "errored" | "timed_out"; startedAt?: string };
     } = {},
-  ) {}
+  ) {
+    this.captchaStatus = options.captcha?.status ?? "idle";
+    this.captchaStartedAt = options.captcha?.startedAt;
+  }
+
+  resumeAfterHumanInput(): void {
+    if (this.captchaStatus !== "errored" && this.captchaStatus !== "timed_out") return;
+    this.captchaStatus = "idle";
+    this.captchaNeedsObservation = true;
+  }
 
   async start(): Promise<void> {
     if (this.closeRequested)
@@ -105,7 +114,7 @@ export class BrowsieBrowserSession {
         await this.startBrowserbase(apiKey);
       } else {
         this.browser = await localBrowser.launch({
-          headless: process.env.BROWSIE_HEADLESS !== "false",
+          headless: process.env.BELL_HEADLESS !== "false",
           viewport: { width: 1360, height: 900 },
         });
         await this.attachStagehand(this.browser);
@@ -171,10 +180,6 @@ export class BrowsieBrowserSession {
       await this.gateCaptcha();
       if (!this.browserbase || !this.remoteSessionId || !this.browser)
         throw new Error("This integration requires a hosted Browserbase session.");
-      if (!this.sessionLogsDisabled)
-        throw new Error(
-          "Set BROWSIE_LOG_SESSION=false before starting a credential-bearing integration.",
-        );
       const page =
         (await this.browser.context.activePage()) ?? (await this.browser.context.newPage());
       const session = await this.browserbase.sessions.retrieve(this.remoteSessionId);
@@ -270,8 +275,6 @@ export class BrowsieBrowserSession {
     const release = await this.acquireOperation();
     try {
       await this.start();
-      if (this.browserbase && !this.sessionLogsDisabled && actions.some(action => "value" in action || action.action === "press"))
-        throw new Error("Hosted form entry requires session logging to be disabled.");
       await this.gateCaptcha();
       const started = performance.now();
       const resolvedActions = actions.map((item) =>
@@ -352,12 +355,14 @@ export class BrowsieBrowserSession {
     host: string;
     url: string;
   }> {
+    const selectors = [input.usernameTarget, input.passwordTarget, input.submitTarget,
+      input.totpTarget, input.otpSubmitTarget, input.successTarget];
+    if (selectors.some((selector) => selector && (/^\s*(?:xpath=|\/|\()/i.test(selector) || selector.includes(">>"))))
+      throw new Error("Secure login requires CSS selectors in the top-level page; frame selectors are not allowed.");
     const release = await this.acquireOperation();
     try {
       await this.start();
       await this.gateCaptcha();
-      if (this.browserbase && !this.sessionLogsDisabled)
-        throw new Error("Hosted credential operations require session logging to be disabled.");
       const started = performance.now();
       const result = await this.requireStagehand().experimentalBatch(
         async ({ page }, values) => {
@@ -423,7 +428,8 @@ export class BrowsieBrowserSession {
         Math.round(performance.now() - started),
       );
       return { status, host, url: result.url };
-    } catch {
+    } catch (error) {
+      if (error instanceof CaptchaHandoffError) throw error;
       addTrace(
         this.state,
         "error",
@@ -563,18 +569,15 @@ export class BrowsieBrowserSession {
   }
 
   private async startBrowserbase(apiKey: string): Promise<void> {
-    this.sessionLogsDisabled = process.env.BROWSIE_LOG_SESSION !== "true";
     this.browserbase = new Browserbase({ apiKey });
     const persistedSessionId = this.loadPersistedSessionId();
 
     if (persistedSessionId) {
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-          if (this.sessionLogsDisabled) {
-            const prior = await this.browserbase.sessions.retrieve(persistedSessionId);
-            if (prior.userMetadata?.networkLogging !== "false")
-              throw new Error("Session logging configuration cannot be verified.");
-          }
+          const prior = await this.browserbase.sessions.retrieve(persistedSessionId);
+          if (prior.userMetadata?.networkLogging !== "false" || prior.userMetadata?.sessionRecording !== "false")
+            throw new Error("Session logging and recording settings cannot be verified.");
           const browser = await stagehandBrowserbase.connect({
             apiKey,
             sessionId: persistedSessionId,
@@ -868,7 +871,7 @@ function safeActivityUrl(value: string): string {
 }
 
 function configuredCaptchaTimeoutMs(): number {
-  const value = Number(process.env.BROWSIE_CAPTCHA_TIMEOUT_MS ?? 30_000);
+  const value = Number(process.env.BELL_CAPTCHA_TIMEOUT_MS ?? 30_000);
   return Number.isFinite(value) && value > 0 ? value : 30_000;
 }
 
@@ -903,14 +906,16 @@ export function browserbaseLaunchOptions(
     keepAlive: true,
     browserSettings: {
       verified: true,
-      logSession: process.env.BROWSIE_LOG_SESSION === "true",
+      logSession: false,
+      recordSession: false,
       solveCaptchas: true,
       ...(contextId ? { context: { id: contextId, persist: true } } : {}),
     },
     userMetadata: {
       product: "bell",
       transport: "stagehand-v4-eve",
-      networkLogging: String(process.env.BROWSIE_LOG_SESSION === "true"),
+      networkLogging: "false",
+      sessionRecording: "false",
     },
   };
 }

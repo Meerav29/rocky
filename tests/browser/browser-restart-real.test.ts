@@ -1,17 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { chromium, type Browser } from "playwright-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { BrowsieBrowserSession } from "../../server/browser/browser-session.js";
+import { BrowserSession } from "../../server/browser/browser-session.js";
 import type { ConversationState } from "../../server/browser/types.js";
 
-const live = process.env.BROWSIE_LIVE_RESTART === "1" && Boolean(process.env.BROWSERBASE_API_KEY),
-  phase = process.env.BROWSIE_RESTART_PHASE,
-  stateFile = process.env.BROWSIE_RESTART_STATE_FILE;
-
-beforeEach(() => vi.stubEnv("BROWSIE_LOG_SESSION", "false"));
-afterEach(() => vi.unstubAllEnvs());
+const live = process.env.BELL_LIVE_RESTART === "1" && Boolean(process.env.BROWSERBASE_API_KEY),
+  phase = process.env.BELL_RESTART_PHASE,
+  stateFile = process.env.BELL_RESTART_STATE_FILE;
 
 describe("opt-in Browserbase restart recovery", () => {
   it.runIf(live && phase === "prepare")(
@@ -23,7 +20,7 @@ describe("opt-in Browserbase restart recovery", () => {
           traces: [],
           browser: { provider: "not-started", status: "idle" },
         },
-        session = new BrowsieBrowserSession(state),
+        session = new BrowserSession(state),
         fixture = "https://bell-fixture.invalid/restart-otp",
         page = `
           <title>Restart OTP fixture</title>
@@ -88,7 +85,7 @@ describe("opt-in Browserbase restart recovery", () => {
     async () => {
       if (!stateFile) throw new Error("The restart state file is required.");
       const saved = JSON.parse(readFileSync(stateFile, "utf8")) as ConversationState,
-        session = new BrowsieBrowserSession(saved);
+        session = new BrowserSession(saved);
       try {
         await session.run([
           { action: "fill", target: "#otp", value: "123456" },

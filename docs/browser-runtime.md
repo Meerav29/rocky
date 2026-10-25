@@ -27,6 +27,9 @@ Hosted browser sessions always disable network logging and recording.
 | `BELL_DRAFT_CONTEXT_TTL_MS` | Unused draft Context lifetime; defaults to seven days. |
 | `BELL_CONTEXT_METADATA_PATH` | Context metadata file; defaults to `.bell/contexts.json`. |
 | `BELL_OPERATOR_USERNAME` / `BELL_OPERATOR_PASSWORD` | Optional HTTP Basic operator credentials for Bell; password must be at least 32 bytes. |
+| `BELL_ONEPASSWORD_BACKEND` | `sdk` (default) or explicitly selected `cli`; there is no automatic fallback between accounts or backends. |
+| `BELL_VAULT_FILE` | Existing encrypted local vault file; defaults to `.bell/vault.enc.json`. |
+| `BELL_VAULT_MASTER_KEY` | Local vault key: 32 bytes encoded as base64 or 64 hexadecimal characters. |
 
 The HTTP channel also supports Vercel OIDC. Unauthenticated development access is restricted
 to loopback hosts. Production deployments must protect the web interface and session routes.
@@ -43,8 +46,10 @@ do not resume sessions created by the previous version.
 Use the variable names in the table above; old configuration names are no longer read.
 To preserve saved Context labels, move the previous metadata file to `.bell/contexts.json`,
 or set `BELL_CONTEXT_METADATA_PATH` to its existing location. The file format is unchanged.
-The retired local vault and incomplete account-connection endpoint are removed; use the
-1Password SDK settings below for credential access.
+To retain an existing local vault, move its encrypted file to `.bell/vault.enc.json` or set
+`BELL_VAULT_FILE` to its location, and copy the existing key into `BELL_VAULT_MASTER_KEY`.
+The encrypted file format is unchanged. Existing CLI users must explicitly select the CLI
+backend and configure its account as described below; SDK failures no longer switch backends.
 
 ## Contexts and storage
 
@@ -68,6 +73,27 @@ credentials resolve server-side immediately before filling.
 For hosted 1Password access, set `OP_SERVICE_ACCOUNT_TOKEN` with access only to the required vault.
 For local use, enable SDK integration in the 1Password desktop app and set `OP_ACCOUNT` to the
 account name shown in its sidebar. Service-account mode takes precedence over desktop access.
+
+Existing 1Password CLI setups can set `BELL_ONEPASSWORD_BACKEND=cli`. Install `op` and use an
+explicit `OP_ACCOUNT` account UUID or sign-in address, or the scoped service token above. An
+account UUID is accepted by both backends. CLI commands never use an implicit last-used account
+or ambient Connect/session credentials, and SDK errors do not trigger a CLI fallback.
+The SDK honors 1Password's Never-autofill policy. CLI access enforces saved website hosts but
+cannot enforce autofill policies that the CLI does not expose; use the default SDK when those
+policies are required. Both modes keep credential values out of model-visible results.
+
+The existing `/api/onepassword/start` and `/api/onepassword/callback` routes are retained for
+the planned per-user OAuth integration. Configure `ONEPASSWORD_CLIENT_ID`,
+`ONEPASSWORD_CLIENT_SECRET`, `ONEPASSWORD_OAUTH_STATE_SECRET`, and your registered HTTPS
+`ONEPASSWORD_REDIRECT_URI` to exercise the exchange. Grant storage and connection to vault
+tools are not implemented: a verified exchange returns HTTP 501 with an explicit explanation,
+not a connected-account success message. This route does not replace SDK or CLI authentication.
+
+Existing encrypted local vaults remain readable through the `native` provider. No vault writer
+or administration interface is shipped. Keep the master key private and protect the vault file
+from modification: its legacy website mappings are trusted operator configuration outside the
+encrypted payload. Only load files controlled by that operator. The tool reads credentials and
+their website mapping from one file snapshot, and generates OTP codes server-side.
 
 Vault login requires HTTPS and the saved hostname, checked before each credential fill and
 submission, including an OTP step after navigation. Credential selectors must target the main page;

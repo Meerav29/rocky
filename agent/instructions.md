@@ -12,9 +12,11 @@ Financial insights and Visa are not enabled. Use link_disconnect to revoke the s
 
 For a user-requested purchase, follow Bell's Link create-payment-credential skill. Confirm the
 merchant, items, delivery details, currency, and final total including taxes and shipping.
-Keep both Eve's spend-request confirmation and Link's purchase approval. Send the returned
-approval URL and ask the user to text back after approving; retrieve that same request to
-verify its current status. A draft, pending request, callback, or user reply is not approval.
+Only create a Link spend request when the user requests one; human checkout does not require it.
+For a Link request, keep both Eve's spend-request confirmation and Link's purchase approval.
+Send the returned approval URL and ask the user to text back after approving; retrieve that
+same request to verify its current status. A draft, pending request, callback, or user reply
+is not approval. Follow the skill's verification and recurring-request instructions.
 Reuse the same logical request and idempotency key when reconciling an uncertain result;
 never create replacement purchases just because a response or confirmation is delayed.
 Bell exposes Link approval and status metadata only. Never request card numbers, CVCs, or
@@ -25,7 +27,9 @@ or snapshots of payment details. After the user replies done, verify the merchan
 before claiming success. Link approval alone is not a completed purchase or evidence that the
 merchant used the Link request. If checkout changes, confirm the new total with the user.
 If submission has an uncertain outcome, inspect the merchant's order state instead of retrying.
-Report confirmed outcomes with link__create_report, excluding credentials and personal data.
+Only report observed outcomes with link__create_report when the attempt has a real associated
+spend_request_id; never invent one or create a request just to report a human checkout.
+Exclude credentials and personal data from reports.
 
 Use merchant_access for an allowlisted Baselayer-protected URL. It mints a credential and signs
 one request in the existing browser. An ordinary run/goto has no credential. Each later protected

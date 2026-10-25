@@ -25,6 +25,31 @@ const secrets = {
   link_pay_token: "synthetic-link-token",
   future_credential: "synthetic-future-secret",
 };
+const purchaseHistory = {
+  ...metadata,
+  merchant_name: "Example", merchant_url: "https://shop.example",
+  context: "The requested monthly notebook delivery, including shipping and tax.",
+  line_items: [{
+    name: "Notebook", url: "https://shop.example/notebook",
+    image_url: "https://shop.example/notebook.png", description: "Blue notebook",
+    sku: "notebook-blue", quantity: 1, unit_amount: 4000,
+    product_url: "https://shop.example/notebook",
+    totals: [{ type: "total", display_text: "Item total", amount: 4000 }],
+  }],
+  totals: [
+    { type: "subtotal", display_text: "Subtotal", amount: 4000 },
+    { type: "tax", display_text: "Tax", amount: 200 },
+    { type: "total", display_text: "Total", amount: 4200 },
+  ],
+  activity_url: "https://link.example/activity/spend_1",
+  expires_at: 1795305600,
+  recurring: { interval: "month", interval_count: 1 },
+  payment_status_details: {
+    outcome: "success", code: null, decline_code: null,
+    amount: 4200, currency: "usd", created: 1792627200,
+    refund_details: { amount: 1000, currency: "usd", state: "succeeded", created: 1792713600 },
+  },
+} satisfies Exclude<Awaited<ReturnType<typeof native.retrieve_spend_request.execute>>, null>;
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
@@ -62,6 +87,53 @@ describe("Link payment boundary", () => {
     await expect(retrieve.execute({ id: "spend_1" }, context)).resolves.toBeNull();
     await expect(retrieve.execute({ id: "spend_1" }, context)).resolves.toEqual({ ...metadata, status: "requires_action", status_details });
     expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves purchase details and recurring payment/refund history from the SDK", async () => {
+    vi.spyOn(native.retrieve_spend_request, "execute").mockResolvedValue(purchaseHistory);
+    vi.spyOn(native.list_spend_requests, "execute").mockResolvedValue([purchaseHistory]);
+    await expect(retrieve.execute({ id: "spend_1" }, context)).resolves.toEqual(purchaseHistory);
+    await expect(list.execute({ include_history: true }, context)).resolves.toEqual([purchaseHistory]);
+  });
+
+  it("keeps recovery details while removing unknown and credential fields at every nested level", async () => {
+    const expected = {
+      ...purchaseHistory,
+      status: "requires_action",
+      status_details: {
+        requires_action: {
+          failure_code: "authentication_required",
+          next_action: {
+            type: "re_authorize", display_message: "Authorize this payment",
+            action_url: "https://link.example/action", resolution: "create_new_spend_request_after_completion",
+            expires_at: null,
+          },
+        },
+      },
+    } satisfies Exclude<Awaited<ReturnType<typeof native.retrieve_spend_request.execute>>, null>;
+    const response = {
+      ...expected, ...secrets,
+      card: { ...secrets.card, id: "card_synthetic", brand: "visa", exp_month: 12, exp_year: 2030 },
+      metadata: { hidden_credential: "synthetic-secret" },
+      line_items: expected.line_items.map((item) => ({
+        ...item, ...secrets, totals: item.totals.map((total) => ({ ...total, ...secrets })),
+      })),
+      totals: expected.totals.map((total) => ({ ...total, ...secrets })),
+      recurring: { ...expected.recurring, ...secrets },
+      payment_status_details: {
+        ...expected.payment_status_details, ...secrets,
+        refund_details: { ...expected.payment_status_details.refund_details, ...secrets },
+      },
+      status_details: {
+        ...secrets,
+        requires_action: {
+          ...expected.status_details.requires_action, ...secrets,
+          next_action: { ...expected.status_details.requires_action.next_action, ...secrets },
+        },
+      },
+    };
+    vi.spyOn(native.retrieve_spend_request, "execute").mockResolvedValue(response);
+    await expect(retrieve.execute({ id: "spend_1" }, context)).resolves.toEqual(expected);
   });
 
   it("filters credentials from creation, mutation, approval, and list responses", async () => {

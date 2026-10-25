@@ -9,6 +9,9 @@ const sdk = vi.hoisted(() => ({
   listItems: vi.fn(),
   getItem: vi.fn(),
 }));
+const cli = vi.hoisted(() => ({ listCliLogins: vi.fn(), readCliLogin: vi.fn() }));
+
+vi.mock("../../server/browser/vault/onepassword-cli", () => cli);
 
 vi.mock("@1password/sdk", () => ({
   createClient: sdk.createClient,
@@ -47,6 +50,7 @@ function loginItem(): Item {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("BELL_ONEPASSWORD_BACKEND", "");
   vi.stubEnv("OP_SERVICE_ACCOUNT_TOKEN", "fixture-service-token");
   vi.stubEnv("OP_ACCOUNT", "");
   sdk.createClient.mockResolvedValue({
@@ -144,6 +148,15 @@ describe("1Password vault", () => {
     await expect(request).rejects.not.toHaveProperty("cause");
     expect(await vault.list()).toHaveLength(1);
     expect(sdk.createClient).toHaveBeenCalledTimes(2);
+    expect(cli.listCliLogins).not.toHaveBeenCalled();
+    expect(cli.readCliLogin).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid backend before accessing credentials", async () => {
+    vi.stubEnv("BELL_ONEPASSWORD_BACKEND", "automatic");
+    await expect(new OnePasswordVault().list()).rejects.toThrow("must be sdk or cli");
+    expect(sdk.createClient).not.toHaveBeenCalled();
+    expect(cli.listCliLogins).not.toHaveBeenCalled();
   });
 
   it.each(["vaults", "items", "item"])("sanitizes %s listing errors", async (operation) => {
@@ -152,6 +165,7 @@ describe("1Password vault", () => {
     const request = new OnePasswordVault().list();
     await expect(request).rejects.toThrow(new Error("Could not list 1Password logins. Check the configured account and vault permissions."));
     await expect(request).rejects.not.toHaveProperty("cause");
+    expect(cli.listCliLogins).not.toHaveBeenCalled();
   });
 
   it("sanitizes credential read errors", async () => {
@@ -159,5 +173,6 @@ describe("1Password vault", () => {
     const request = new OnePasswordVault().login("vault-id", "login-id");
     await expect(request).rejects.toThrow(new Error("Could not read the 1Password login. Check the item handle and vault permissions."));
     await expect(request).rejects.not.toHaveProperty("cause");
+    expect(cli.readCliLogin).not.toHaveBeenCalled();
   });
 });

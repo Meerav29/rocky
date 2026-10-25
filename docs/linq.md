@@ -74,7 +74,7 @@ still need a reachable HTTPS application host. See
    Keep handoff links private: they grant browser control. Token expiry prevents reopening
    the link but does not revoke an already-open Live View; end the browser session when done.
 
-5. Use persistent storage for Bell's Context metadata on a single-instance
+5. Use persistent storage for Bell's Context metadata and any existing local vault file on a single-instance
    host, or configure durable shared storage before a multi-instance/serverless deployment.
    Hosted 1Password access requires a scoped `OP_SERVICE_ACCOUNT_TOKEN`; `OP_ACCOUNT`
    desktop authorization works only on the machine running the 1Password app. Keep all

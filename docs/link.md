@@ -123,8 +123,8 @@ DELETE FROM bell_link_oauth_attempts WHERE expires_at < now() - interval '1 day'
 ```
 
 PostgreSQL here stores Link state only. Eve still needs durable workflow storage to resume
-parked turns after host replacement, and Bell's Context metadata file needs its documented
-storage. This change does not make the rest of Bell ready for arbitrary multi-instance hosting
+parked turns after host replacement, and Bell's Context metadata and optional local vault files
+need their documented storage. This change does not make the rest of Bell ready for arbitrary multi-instance hosting
 or unrelated users.
 
 ## Transcript boundary

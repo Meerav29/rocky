@@ -1,5 +1,7 @@
 import type { Client, Item } from "@1password/sdk";
 
+import { listCliLogins, readCliLogin } from "./onepassword-cli";
+
 export interface SafeLoginItem {
   itemId: string;
   vaultId: string;
@@ -20,6 +22,7 @@ export class OnePasswordVault {
   private client?: Promise<Client>;
 
   async list(): Promise<SafeLoginItem[]> {
+    if (backend() === "cli") return listCliLogins();
     const client = await this.getClient();
     try {
       const sdk = await import("@1password/sdk"),
@@ -51,6 +54,7 @@ export class OnePasswordVault {
   }
 
   async login(vaultId: string, itemId: string): Promise<OnePasswordLogin> {
+    if (backend() === "cli") return readCliLogin(vaultId, itemId);
     const client = await this.getClient(),
       sdk = await import("@1password/sdk");
     let item: Item;
@@ -95,6 +99,13 @@ export class OnePasswordVault {
 }
 
 export const onePasswordVault = new OnePasswordVault();
+
+function backend(): "sdk" | "cli" {
+  const value = process.env.BELL_ONEPASSWORD_BACKEND?.trim() || "sdk";
+  if (value !== "sdk" && value !== "cli")
+    throw new Error("BELL_ONEPASSWORD_BACKEND must be sdk or cli.");
+  return value;
+}
 
 function allowedHosts(item: Item): string[] {
   return [...new Set(item.websites.flatMap((site) => {

@@ -4,7 +4,7 @@
 
 **BELL is a reference architecture and sample app for developers building personal assistants. Developers should have a practical starting point for building their own versions that are truly performant on execution.**
 
-Browserbase, Linq, 1Password, Baselayer, and Stripe power assistants that execute tasks on your behalf.
+Browserbase, Eve by Vercel, Linq, Link by Stripe, 1Password, Baselayer power assistants that execute tasks on your behalf.
 
 Bell pairs an Eve agent with browser
 automation powered by Browserbase and a compact web interface. This standalone repository owns

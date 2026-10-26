@@ -73,8 +73,11 @@ Best Buy browsing does not require Baselayer and does not demonstrate merchant v
   Add a one-time password field if the site uses TOTP. The vault tools enforce the saved
   website host and HTTPS before filling credentials. Credentials are resolved on the server; a URL alone does not
   provide a login.
-  The planned per-user OAuth routes are retained, but they do not yet connect an account to
-  the vault tools. Use the configured SDK or CLI access for working logins.
+  These vault tools are for the trusted operator and are unavailable over Linq.
+  Personal iMessage [1Password Agentic Autofill](docs/onepassword.md) is staged and disabled by default.
+  Stagehand 4.3.0 and 1Password currently compete for the hosted session's extension slot.
+  Keep `ONEPASSWORD_ENABLED=false` and `BROWSERBASE_1PASSWORD_EXTENSION_ID` unset until that
+  launch path is fixed and the live flow passes verification. Ordinary browsing remains available.
 - Local vault: existing encrypted files remain readable using `BELL_VAULT_FILE` and
   `BELL_VAULT_MASTER_KEY`. No vault administration UI or writing API is included. Protect the
   file and its website mappings as trusted operator configuration.

@@ -13,6 +13,7 @@
     "build": "pnpm build:agent && next build",
     "start": "next start --hostname 127.0.0.1 --port 4320",
     "test": "vitest run",
+    "repro:stagehand-extensions": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/repro-stagehand-extensions.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "check": "pnpm test && pnpm typecheck && pnpm lint && pnpm build",

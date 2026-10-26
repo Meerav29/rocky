@@ -20,14 +20,14 @@ describe("configured vault discovery", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("does not contact unconfigured optional integrations", async () => {
-    expect(await vaultList.execute({}, {} as never)).toEqual({ items: [] });
+    expect(await vaultList.execute({}, { session: { auth: { current: { authenticator: "http-basic" } } } } as never)).toEqual({ items: [] });
     expect(mocks.nativeList).not.toHaveBeenCalled();
     expect(mocks.onePasswordList).not.toHaveBeenCalled();
   });
 
   it("discovers native logins without requiring 1Password", async () => {
     vi.stubEnv("BELL_VAULT_MASTER_KEY", "fixture-key");
-    expect(await vaultList.execute({}, {} as never)).toEqual({
+    expect(await vaultList.execute({}, { session: { auth: { current: { authenticator: "http-basic" } } } } as never)).toEqual({
       items: [{ provider: "native", itemId: "local-item" }],
     });
     expect(mocks.onePasswordList).not.toHaveBeenCalled();
@@ -36,7 +36,7 @@ describe("configured vault discovery", () => {
   it("includes provider IDs so the selected login reaches the correct backend", async () => {
     vi.stubEnv("BELL_VAULT_MASTER_KEY", "fixture-key");
     vi.stubEnv("OP_ACCOUNT", "fixture-account");
-    expect(await vaultList.execute({}, {} as never)).toEqual({ items: [
+    expect(await vaultList.execute({}, { session: { auth: { current: { authenticator: "http-basic" } } } } as never)).toEqual({ items: [
       { provider: "native", itemId: "local-item" },
       { provider: "onepassword", vaultId: "vault-id", itemId: "remote-item" },
     ] });
@@ -44,8 +44,14 @@ describe("configured vault discovery", () => {
 
   it("does not silently hide errors for an explicitly requested provider", async () => {
     mocks.onePasswordList.mockRejectedValue(new Error("Configure 1Password"));
-    await expect(vaultList.execute({ provider: "onepassword" }, {} as never))
+    await expect(vaultList.execute({ provider: "onepassword" }, { session: { auth: { current: { authenticator: "http-basic" } } } } as never))
       .rejects.toThrow("Configure 1Password");
     expect(mocks.nativeList).not.toHaveBeenCalled();
   });
+});
+
+it("does not expose the operator's vault to an iMessage sender", async () => {
+  mocks.onePasswordList.mockClear();
+  await expect(vaultList.execute({ provider: "onepassword" }, { session: { auth: { current: { authenticator: "linq-message" } } } } as never)).rejects.toThrow("personal credentials");
+  expect(mocks.onePasswordList).not.toHaveBeenCalled();
 });

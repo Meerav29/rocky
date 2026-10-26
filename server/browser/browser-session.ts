@@ -1,3 +1,4 @@
+import { personalBrowserEnabled, requireReusableContexts } from "../onepassword/browser-policy";
 import Browserbase from "@browserbasehq/sdk";
 import {
   localBrowser,
@@ -102,8 +103,10 @@ export class BrowserSession {
       if (requested === "browserbase") {
         const apiKey = process.env.BROWSERBASE_API_KEY;
         if (!apiKey) throw new Error("BROWSERBASE_API_KEY is required for Browserbase mode.");
+        if (personalBrowserEnabled() && (this.options.contextId || process.env.BROWSERBASE_CONTEXT_ID))
+          throw new Error("Start a new conversation without a reusable Context for personal 1Password.");
         const currentContextId = this.options.contextId ?? process.env.BROWSERBASE_CONTEXT_ID;
-        if (this.options.ensureContext) {
+        if (this.options.ensureContext && !personalBrowserEnabled()) {
           const context = await this.options.ensureContext(currentContextId);
           this.options.contextId = context.id;
           contextStatus = context.status;
@@ -170,7 +173,7 @@ export class BrowserSession {
    */
   async withHostedPage<T>(
     signal: AbortSignal,
-    operation: (page: Page, connectUrl: string) => Promise<T>,
+    operation: (page: Page, connectUrl: string, sessionId: string) => Promise<T>,
     privateResult = false,
   ): Promise<T> {
     signal.throwIfAborted();
@@ -185,7 +188,7 @@ export class BrowserSession {
         (await this.browser.context.activePage()) ?? (await this.browser.context.newPage());
       const session = await this.browserbase.sessions.retrieve(this.remoteSessionId);
       if (!session.connectUrl) throw new Error("The hosted browser connection is unavailable.");
-      const result = await operation(page, session.connectUrl);
+      const result = await operation(page, session.connectUrl, this.remoteSessionId);
       this.xpathMap = {};
       if (!privateResult) {
         this.updateBrowserState(await page.url(), await page.title());
@@ -500,6 +503,7 @@ export class BrowserSession {
   }
 
   async exportCookies(): Promise<CookieParam[]> {
+    requireReusableContexts();
     if (!this.hasStarted()) return [];
     return this.browser!.context.cookies();
   }
@@ -581,6 +585,8 @@ export class BrowserSession {
           const prior = await this.browserbase.sessions.retrieve(persistedSessionId);
           if (prior.userMetadata?.networkLogging !== "false" || prior.userMetadata?.sessionRecording !== "false")
             throw new Error("Session logging and recording settings cannot be verified.");
+          if (personalBrowserEnabled() && (prior.userMetadata?.onepasswordExtension !== process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID || prior.userMetadata?.privateContext !== "true"))
+            throw new Error("The personal 1Password browser settings cannot be verified.");
           const browser = await stagehandBrowserbase.connect({
             apiKey,
             sessionId: persistedSessionId,
@@ -895,8 +901,10 @@ export function browserbaseLaunchOptions(
 ) {
   const contextId = durableContextId ?? process.env.BROWSERBASE_CONTEXT_ID;
   const projectId = process.env.BROWSERBASE_PROJECT_ID;
+  if (personalBrowserEnabled() && contextId) throw new Error("Personal 1Password cannot use a reusable Context.");
   return {
     apiKey,
+    ...(personalBrowserEnabled() ? { extensionId: process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID!.trim() } : {}),
     ...(projectId ? { projectId } : {}),
     proxies: proxyLocation
       ? [
@@ -919,6 +927,7 @@ export function browserbaseLaunchOptions(
       transport: "stagehand-v4-eve",
       networkLogging: "false",
       sessionRecording: "false",
+      ...(personalBrowserEnabled() ? { onepasswordExtension: process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID!.trim(), privateContext: "true" } : {}),
     },
   };
 }

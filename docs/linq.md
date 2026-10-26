@@ -76,9 +76,9 @@ still need a reachable HTTPS application host. See
 
 5. Use persistent storage for Bell's Context metadata and any existing local vault file on a single-instance
    host, or configure durable shared storage before a multi-instance/serverless deployment.
-   Hosted 1Password access requires a scoped `OP_SERVICE_ACCOUNT_TOKEN`; `OP_ACCOUNT`
-   desktop authorization works only on the machine running the 1Password app. Keep all
-   provider credentials server-side in the deployment's secret configuration.
+   Personal 1Password access uses [Agentic Autofill](onepassword.md), per-sender OAuth, and
+   private browsers without reusable Contexts. Operator service-account and desktop vaults
+   are not exposed to Linq senders. Keep provider credentials in the server secret store.
 
 ## Demo from your phone
 
@@ -92,10 +92,10 @@ Bell should visit the site in Browserbase and reply in the same Linq chat. Follo
 that chat's browser. Report what the browser actually sees; merchant pages can vary by region
 or present a challenge. This demo does not log in, add items to a cart, or purchase anything.
 
-For a saved login, configure 1Password and ask Bell to use the vault tools for the saved website.
-For an OTP or passkey, complete the step through the human handoff link, then text Bell to continue.
-Do not send passwords or OTPs as chat messages. Desktop 1Password access requires Bell to run
-on the same computer as the desktop app.
+For a personal saved login, configure [1Password Agentic Autofill](onepassword.md), connect
+from the private conversation, and approve the website in the 1Password desktop app.
+The initial flow supports single-step sign-in; OTP and passkey flows need separate handling.
+Do not send passwords or OTPs as chat messages.
 
 ## Verification boundary
 

@@ -1,3 +1,4 @@
+import { requireReusableContexts } from "../onepassword/browser-policy";
 import Browserbase from "@browserbasehq/sdk";
 
 import { getContextMetadataStore } from "./context-metadata-store.js";
@@ -13,6 +14,7 @@ export interface AgentContextRecord {
 const DEFAULT_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export async function listAgentContexts(): Promise<AgentContextRecord[]> {
+  requireReusableContexts();
   const sdk = browserbase();
   const metadata = getContextMetadataStore();
   const local = await metadata.read();
@@ -42,6 +44,7 @@ export async function listAgentContexts(): Promise<AgentContextRecord[]> {
 }
 
 export async function createAgentContext(name: string): Promise<AgentContextRecord> {
+  requireReusableContexts();
   const cleanName = validateName(name);
   const remote = await browserbase().contexts.create({
     name: cleanName,
@@ -119,6 +122,7 @@ export async function ensureAgentContext(
 }
 
 export async function promoteAgentContext(id: string, name?: string): Promise<AgentContextRecord> {
+  requireReusableContexts();
   validateId(id);
   const sdk = browserbase();
   const remote = await sdk.contexts.retrieve(id);
@@ -146,6 +150,7 @@ export async function isDraftAgentContext(id: string, ownerSessionId?: string): 
 }
 
 export async function selectAgentContext(id: string): Promise<void> {
+  requireReusableContexts();
   validateId(id);
   await browserbase().contexts.retrieve(id);
   await getContextMetadataStore().select(id);

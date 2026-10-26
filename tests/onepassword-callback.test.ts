@@ -1,71 +1,56 @@
 import { randomBytes } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { beginOAuth, completeOAuth, redirectUri } from "../server/onepassword/oauth";
-
-const origin = "https://bell-stack.vercel.app";
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.unstubAllGlobals();
-});
-
-beforeEach(() => {
-  vi.stubEnv("ONEPASSWORD_CLIENT_ID", "synthetic-client");
-  vi.stubEnv("ONEPASSWORD_CLIENT_SECRET", "synthetic-secret");
-  vi.stubEnv("ONEPASSWORD_OAUTH_STATE_SECRET", randomBytes(32).toString("base64"));
-  vi.stubEnv("ONEPASSWORD_REDIRECT_URI", `${origin}/api/onepassword/callback`);
-});
-
-describe("clean 1Password callback", () => {
-  it("rejects query parameters and fragments in the registered redirect", () => {
-    vi.stubEnv("ONEPASSWORD_REDIRECT_URI", `${origin}/api/onepassword/callback?bypass=1`);
-    expect(() => redirectUri()).toThrow();
-    vi.stubEnv("ONEPASSWORD_REDIRECT_URI", `${origin}/api/onepassword/callback#fragment`);
-    expect(() => redirectUri()).toThrow();
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { configuration, integrationIdentity, ownerOf } from "../server/onepassword/config";
+import { callbackPage, onePasswordPost } from "../server/onepassword/http";
+import { approvalPage } from "../server/onepassword/approval-http";
+import { browserbaseLaunchOptions } from "../server/browser/browser-session";
+import { requireReusableContexts } from "../server/onepassword/browser-policy";
+import { validateLogin } from "../server/onepassword/login";
+const key = (path = "//api.1password.com/oauth-clients/client/accounts/account/users/user") => `ops_${Buffer.from(JSON.stringify({ ver: 1, typ: "oauth_integration_key", key: "a".repeat(64), path })).toString("base64url")}`;
+afterEach(() => vi.unstubAllEnvs());
+describe("personal 1Password boundaries", () => {
+  it("validates the complete key envelope and binds it to the registered client and API host", () => {
+    expect(integrationIdentity(key(), "client")).toMatchObject({ accountId: "account", userId: "user" });
+    for (const value of ["ops_bad", key("//attacker.example/oauth-clients/client/accounts/account/users/user"), key("//api.1password.com/oauth-clients/other/accounts/account/users/user")]) expect(() => integrationIdentity(value, "client")).toThrow();
   });
-
-  it("starts production OAuth with PKCE and a secure state cookie", () => {
-    const response = beginOAuth();
-    expect(response.status).toBe(302);
-    const location = new URL(response.headers.get("location")!);
-    expect(location.origin).toBe("https://my.1password.com");
-    expect(location.searchParams.get("redirect_uri")).toBe(`${origin}/api/onepassword/callback`);
-    expect(location.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(location.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(response.headers.get("set-cookie")).toMatch(/HttpOnly; Secure; SameSite=Lax/);
-    expect(response.headers.get("location")).not.toContain("synthetic-secret");
+  it("rejects application principals and non-Linq user identities", () => {
+    expect(() => ownerOf({ type: "app" })).toThrow();
+    expect(() => ownerOf({ type: "user", issuer: "caller", id: "linq:user" })).toThrow();
+    expect(ownerOf({ type: "user", issuer: "linq", id: "linq:user" })).toBe('["linq","linq:user"]');
   });
-
-  it("rejects a callback state mismatch before exchanging the code", async () => {
-    const start = beginOAuth();
-    const cookie = start.headers.get("set-cookie")!;
-    const request = new Request(`${origin}/api/onepassword/callback?code=synthetic-code&state=wrong`, { headers: { cookie } });
-    const fetcher = vi.fn();
-    vi.stubGlobal("fetch", fetcher);
-    const response = await completeOAuth(request);
+  it("requires an exact HTTPS callback and a canonical encryption key", () => {
+    const env = { BELL_PUBLIC_URL: "https://bell.example", ONEPASSWORD_REDIRECT_URI: "https://bell.example/api/onepassword/callback", ONEPASSWORD_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64"), ONEPASSWORD_CLIENT_ID: "client", ONEPASSWORD_CLIENT_SECRET: "secret", DATABASE_URL: "postgres://test" };
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    expect(configuration().origin).toBe(env.BELL_PUBLIC_URL);
+    vi.stubEnv("ONEPASSWORD_REDIRECT_URI", env.ONEPASSWORD_REDIRECT_URI + "?bypass=1");
+    expect(configuration).toThrow();
+  });
+  it("serves isolated callback/approval pages without third-party scripts or caching", async () => {
+    for (const response of [callbackPage(), approvalPage()]) {
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      expect(await response.text()).not.toMatch(/localStorage|sessionStorage|console\./);
+    }
+  });
+  it("rejects a cross-origin callback before consuming a code", async () => {
+    const capture = vi.fn();
+    const service = () => ({ config: { origin: "https://bell.example" }, capture }) as never;
+    const response = await onePasswordPost(new Request("https://bell.example/api/onepassword/complete", { method: "POST", headers: { origin: "https://attacker.example", "content-type": "application/json" }, body: "{}" }), "complete", service);
     expect(response.status).toBe(400);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
   });
-
-  it("preserves code exchange without falsely claiming an account is connected or returning tokens", async () => {
-    const start = beginOAuth();
-    const location = new URL(start.headers.get("location")!);
-    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
-      const body = init.body as URLSearchParams;
-      expect(body.get("redirect_uri")).toBe(`${origin}/api/onepassword/callback`);
-      expect(body.get("code_verifier")).toBeTruthy();
-      expect(body.get("code")).toBe("synthetic-code");
-      expect(body.get("code_verifier")).not.toBe(location.searchParams.get("code_challenge"));
-      return Response.json({ access_token: "synthetic-access", refresh_token: "synthetic-refresh" });
-    });
-    vi.stubGlobal("fetch", fetcher);
-    const response = await completeOAuth(new Request(`${origin}/api/onepassword/callback?code=synthetic-code&state=${encodeURIComponent(location.searchParams.get("state")!)}`, { headers: { cookie: start.headers.get("set-cookie")! } }));
-    expect(response.status).toBe(501);
-    const message = await response.text();
-    expect(message).toContain("No account was connected to Bell");
-    expect(message).not.toMatch(/synthetic-access|synthetic-refresh/);
-    expect(response.headers.get("set-cookie")).toMatch(/Max-Age=0/);
-    expect(fetcher).toHaveBeenCalledOnce();
+  it("uses private non-recorded browsers and rejects reusable Contexts in personal mode", () => {
+    vi.stubEnv("BROWSERBASE_1PASSWORD_EXTENSION_ID", "uploaded-extension");
+    vi.stubEnv("BROWSERBASE_CONTEXT_ID", "");
+    const options = browserbaseLaunchOptions("test-key");
+    expect(options.extensionId).toBe("uploaded-extension");
+    expect(options.browserSettings).toMatchObject({ logSession: false, recordSession: false });
+    expect(options.browserSettings.context).toBeUndefined();
+    expect(options.userMetadata.privateContext).toBe("true");
+    expect(() => browserbaseLaunchOptions("test-key", "shared-context")).toThrow();
+    expect(requireReusableContexts).toThrow();
+  });
+  it("rejects ambiguous success destinations and cross-origin or credential-bearing URLs", () => {
+    for (const successUrl of ["http://example.com/home", "https://other.example/home", "https://example.com/login", "https://user:pass@example.com/home"]) expect(() => validateLogin({ loginUrl: "https://example.com/login", successUrl })).toThrow();
   });
 });

@@ -38,9 +38,10 @@ afterEach(() => {
 describe("shared hosted-page integration boundary", () => {
   it("uses the existing page and exposes only the callback result", async () => {
     const { session, state, page } = fixture();
-    const operation = vi.fn(async (active, connection) => {
+    const operation = vi.fn(async (active, connection, sessionId) => {
       expect(active).toBe(page);
       expect(connection).toBe("wss://private-connection");
+      expect(sessionId).toBe("private-session");
       return { accepted: true };
     });
     expect(await session.withHostedPage(new AbortController().signal, operation)).toEqual({

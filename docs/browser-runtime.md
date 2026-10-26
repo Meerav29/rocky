@@ -82,12 +82,10 @@ The SDK honors 1Password's Never-autofill policy. CLI access enforces saved webs
 cannot enforce autofill policies that the CLI does not expose; use the default SDK when those
 policies are required. Both modes keep credential values out of model-visible results.
 
-The existing `/api/onepassword/start` and `/api/onepassword/callback` routes are retained for
-the planned per-user OAuth integration. Configure `ONEPASSWORD_CLIENT_ID`,
-`ONEPASSWORD_CLIENT_SECRET`, `ONEPASSWORD_OAUTH_STATE_SECRET`, and your registered HTTPS
-`ONEPASSWORD_REDIRECT_URI` to exercise the exchange. Grant storage and connection to vault
-tools are not implemented: a verified exchange returns HTTP 501 with an explicit explanation,
-not a connected-account success message. This route does not replace SDK or CLI authentication.
+Personal iMessage accounts use [Agentic Autofill](onepassword.md), with per-sender encrypted
+OAuth connections and explicit approval in the 1Password app. Operator SDK/CLI vault tools
+are not available over Linq. Personal mode disables reusable Contexts; each conversation
+keeps a private browser, and failed fills require a new conversation.
 
 Existing encrypted local vaults remain readable through the `native` provider. No vault writer
 or administration interface is shipped. Keep the master key private and protect the vault file

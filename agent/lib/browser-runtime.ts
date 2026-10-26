@@ -1,3 +1,4 @@
+import { personalBrowserEnabled, withPersonalBrowserLock } from "../../server/onepassword/browser-policy";
 import {
   createAgentContext,
   ensureAgentContext,
@@ -82,7 +83,9 @@ export async function runBrowserOperation<T>(
   operation: BrowserOperation<T>,
   includeScreenshot = false,
 ): Promise<BrowserToolOutput<T>> {
-  return withBrowserPrivacyLock(sessionId, () => runBrowserOperationUnlocked(sessionId, operation, includeScreenshot), undefined, Boolean(taskState.get().browser.sessionId));
+  return withBrowserPrivacyLock(sessionId,
+    () => withPersonalBrowserLock(sessionId, () => runBrowserOperationUnlocked(sessionId, operation, includeScreenshot)),
+    undefined, Boolean(taskState.get().browser.sessionId));
 }
 
 async function runBrowserOperationUnlocked<T>(sessionId: string, operation: BrowserOperation<T>, includeScreenshot: boolean): Promise<BrowserToolOutput<T>> {
@@ -325,7 +328,7 @@ function createRuntimeBrowser(
     contextId,
     proxyLocation,
     captcha: taskState.get().captcha,
-    ensureContext: async (currentContextId) => {
+    ensureContext: personalBrowserEnabled() ? undefined : async (currentContextId) => {
       const context = await ensureAgentContext(sessionId, currentContextId);
       state.browser.contextId = context.id;
       state.browser.contextStatus = context.status;

@@ -1,7 +1,7 @@
 # Bell repository
 
 Bell lives in [browserbase/bell-stack](https://github.com/browserbase/bell-stack).
-One Next.js application serves the web interface and integrations. One Eve agent owns the web
+One Next.js application serves the web interface and integrations. One Eve by Vercel agent owns the web
 and Linq conversations; both channels use Bell's browser runtime directly.
 
 ```text
@@ -13,6 +13,30 @@ tests/browser/          Browser runtime regression tests and local fixtures
 package.json            Application dependencies and commands
 pnpm-lock.yaml          One dependency resolution tree
 ```
+
+## Eve by Vercel
+
+[Eve by Vercel](https://eve.dev/docs) runs Bell's agent, conversation state, tools, and channels.
+Configure the model and session limits in [`agent/agent.ts`](../agent/agent.ts), behavior in
+[`agent/instructions.md`](../agent/instructions.md), and tools in [`agent/tools/`](../agent/tools/).
+The [web channel](../agent/channels/eve.ts) and [Linq channel](../agent/channels/linq.ts) use the
+same agent with separate conversations. [Hooks](../agent/hooks/) maintain task state and browser
+lifecycle; channel callbacks also handle terminal-session cleanup. Restart Bell after runtime edits.
+
+## Integration implementation
+
+| Integration | Implementation | Guide |
+| --- | --- | --- |
+| Browserbase + Stagehand | [Browser runtime](../agent/lib/browser-runtime.ts), [session management](../server/browser/browser-session.ts) | [Browser configuration](browser-runtime.md) |
+| Eve by Vercel | [Agent](../agent/agent.ts), [channels](../agent/channels/), [hooks](../agent/hooks/) | [Eve in Bell](#eve-by-vercel) |
+| Linq | [Channel and sender policy](../agent/channels/linq.ts) | [Messaging setup](linq.md) |
+| Link by Stripe | [Eve extension and tools](../agent/extensions/link/), [authorization](../agent/lib/link-auth.ts), [server implementation](../server/link/) | [Sandbox and wallet setup](link.md) |
+| 1Password | [Operator SDK/CLI access](../server/browser/vault/onepassword.ts), [personal authorization](../agent/lib/onepassword-auth.ts), [personal server implementation](../server/onepassword/) | [Operator credentials](browser-runtime.md#credentials-and-otp), [personal access status](onepassword.md) |
+| Baselayer | [Agent tool](../agent/tools/merchant_access.ts), [credential minting](../server/baselayer.ts), [merchant verification](../server/verified-merchant.ts) | [Merchant access](baselayer.md) |
+
+Personal 1Password Agentic Autofill is implemented but disabled by default pending hosted extension
+support and live verification. Keep `ONEPASSWORD_ENABLED=false` and the extension ID unset as
+described in its guide. Operator SDK/CLI access remains separate and is unavailable over Linq.
 
 ## Development
 

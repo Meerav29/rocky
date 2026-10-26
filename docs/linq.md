@@ -1,7 +1,7 @@
 # Text Bell through Linq
 
 Configure Bell with a receiving phone number from your own Linq account.
-Linq carries iMessage and SMS. [Link wallet OAuth and checkout](link.md) use this channel's
+Linq carries iMessage and SMS. [Link by Stripe wallet OAuth and checkout](link.md) use this channel's
 verified sender identity and require separate configuration.
 
 ```text
@@ -76,9 +76,10 @@ still need a reachable HTTPS application host. See
 
 5. Use persistent storage for Bell's Context metadata and any existing local vault file on a single-instance
    host, or configure durable shared storage before a multi-instance/serverless deployment.
-   Personal 1Password access uses [Agentic Autofill](onepassword.md), per-sender OAuth, and
-   private browsers without reusable Contexts. Operator service-account and desktop vaults
-   are not exposed to Linq senders. Keep provider credentials in the server secret store.
+   Personal [1Password Agentic Autofill](onepassword.md) is disabled by default pending hosted
+   extension support and live verification. Its implementation uses per-sender OAuth and private
+   browsers without reusable Contexts. Operator service-account and desktop vaults are not
+   exposed to Linq senders. Keep provider credentials in the server secret store.
 
 ## Demo from your phone
 
@@ -92,10 +93,11 @@ Bell should visit the site in Browserbase and reply in the same Linq chat. Follo
 that chat's browser. Report what the browser actually sees; merchant pages can vary by region
 or present a challenge. This demo does not log in, add items to a cart, or purchase anything.
 
-For a personal saved login, configure [1Password Agentic Autofill](onepassword.md), connect
-from the private conversation, and approve the website in the 1Password desktop app.
-The initial flow supports single-step sign-in; OTP and passkey flows need separate handling.
-Do not send passwords or OTPs as chat messages.
+Personal saved logins are unavailable while [1Password Agentic Autofill](onepassword.md) is disabled.
+Keep `ONEPASSWORD_ENABLED=false` and `BROWSERBASE_1PASSWORD_EXTENSION_ID` unset until the guide's
+hosted extension and live verification requirements are met. The staged personal flow supports
+single-step sign-in only; OTP and passkeys are not implemented. Do not send passwords or OTPs
+as chat messages.
 
 ## Verification boundary
 

@@ -1,6 +1,6 @@
 # Browser runtime
 
-Bell's Eve agent owns conversation history and tool execution. Browser tools share one in-process
+Bell's Eve by Vercel agent owns conversation history and tool execution. Browser tools share one in-process
 Stagehand runtime per Eve session. Follow-up turns reuse the browser; saved Browserbase session
 metadata supports reconnecting after a worker restart. Hosted launches request managed proxies,
 Verified Browsers, and keep-alive on every attempt, including retries.
@@ -82,7 +82,9 @@ The SDK honors 1Password's Never-autofill policy. CLI access enforces saved webs
 cannot enforce autofill policies that the CLI does not expose; use the default SDK when those
 policies are required. Both modes keep credential values out of model-visible results.
 
-Personal iMessage accounts use [Agentic Autofill](onepassword.md), with per-sender encrypted
+Personal iMessage [1Password Agentic Autofill](onepassword.md) is disabled by default pending
+hosted extension support and live verification. Keep `ONEPASSWORD_ENABLED=false` and
+`BROWSERBASE_1PASSWORD_EXTENSION_ID` unset. The staged implementation uses per-sender encrypted
 OAuth connections and explicit approval in the 1Password app. Operator SDK/CLI vault tools
 are not available over Linq. Personal mode disables reusable Contexts; each conversation
 keeps a private browser, and failed fills require a new conversation.

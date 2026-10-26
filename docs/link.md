@@ -1,4 +1,7 @@
-# Link sandbox and wallet OAuth over Linq
+# Link by Stripe: sandbox and wallet OAuth over Linq
+
+Link by Stripe provides wallet authorization, spend approval, and checkout. Linq carries the
+messages; Eve by Vercel runs the agent and authorization flow. These are separate integrations.
 
 ## Sandbox: no database or saved wallet credentials
 

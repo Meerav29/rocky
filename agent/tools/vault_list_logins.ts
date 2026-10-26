@@ -1,22 +1,20 @@
 import { defineTool, toolOutput } from "eve/tools";
 import { z } from "zod";
 
-import { nativeVault, onePasswordVault } from "../../server/browser/vault/index.js";
+import { onePasswordVault } from "../../server/browser/vault/onepassword.js";
+import { nativeVault } from "../../server/browser/vault/native.js";
 
 export default defineTool({
   description:
-    "List safe login metadata and opaque handles. No secret values are returned. Choose only an item whose allowedHosts contains the current page host.",
-  inputSchema: z.object({
-    provider: z.enum(["native", "onepassword"]).optional(),
-  }),
+    "List safe login metadata and opaque item IDs from configured vaults. No secret values are returned. Use the returned provider and IDs, and choose only an item whose allowedHosts contains the current page host.",
+  inputSchema: z.object({ provider: z.enum(["native", "onepassword"]).optional() }),
   async execute({ provider }) {
-    const providers = provider ? [provider] : (["native", "onepassword"] as const);
     const items = [];
-    for (const id of providers) {
-      const vault = id === "native" ? nativeVault : onePasswordVault;
-      const status = await vault.status();
-      if (status.healthy) items.push(...(await vault.list()));
-    }
+    if (provider === "native" || (!provider && process.env.BELL_VAULT_MASTER_KEY?.trim()))
+      items.push(...await nativeVault.list());
+    if (provider === "onepassword" || (!provider &&
+      (process.env.OP_SERVICE_ACCOUNT_TOKEN?.trim() || process.env.OP_ACCOUNT?.trim())))
+      items.push(...(await onePasswordVault.list()).map((item) => ({ ...item, provider: "onepassword" as const })));
     return { items };
   },
   toModelOutput(output) {

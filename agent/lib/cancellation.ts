@@ -1,4 +1,4 @@
-export class BrowsieCancellationError extends Error {
+export class BrowserCancellationError extends Error {
   override readonly name = "AbortError";
 
   constructor() {
@@ -22,7 +22,7 @@ export async function runWithCancellation<T>(
 ): Promise<T> {
   if (signal.aborted) {
     await cleanup().catch(() => undefined);
-    throw new BrowsieCancellationError();
+    throw new BrowserCancellationError();
   }
 
   let onAbort!: () => void;
@@ -35,7 +35,7 @@ export async function runWithCancellation<T>(
   });
   const pending: Promise<Outcome<T>> = Promise.resolve()
     .then(() => {
-      if (signal.aborted) throw new BrowsieCancellationError();
+      if (signal.aborted) throw new BrowserCancellationError();
       return operation();
     })
     .then(
@@ -47,7 +47,7 @@ export async function runWithCancellation<T>(
     const outcome = await Promise.race([pending, canceled]);
     if (outcome.kind === "canceled") {
       await outcome.cleanup;
-      throw new BrowsieCancellationError();
+      throw new BrowserCancellationError();
     }
     if (outcome.kind === "failed") throw outcome.error;
     return outcome.value;

@@ -6,8 +6,8 @@ import {
   promoteAgentContext,
   selectAgentContext,
 } from "../../server/browser/agent-contexts.js";
-import { BrowsieBrowserSession, CaptchaHandoffError } from "../../server/browser/browser-session.js";
-import { addTrace } from "../../server/browser/trace.js";
+import { BrowserSession, CaptchaHandoffError } from "../../server/browser/browser-session.js";
+import { withBrowserPrivacyLock } from "../../server/browser/privacy-lock";
 import type { BrowserProxyLocation, ConversationState, TraceEvent } from "../../server/browser/types.js";
 import { runWithCancellation } from "./cancellation";
 import {
@@ -15,17 +15,16 @@ import {
   closeTaskBrowser,
   reconcileCaptchaAfterRestart,
   recordTaskBrowserContext,
-  recordTaskBrowserProxyLocation,
   setTaskBrowserContext,
   taskState,
   updateTaskBrowser,
   type DurableCaptchaRecord,
 } from "./task-state";
 
-type BrowserOperation<T> = (browser: BrowsieBrowserSession) => Promise<T>;
+type BrowserOperation<T> = (browser: BrowserSession) => Promise<T>;
 
 interface BrowserRuntime {
-  browser: BrowsieBrowserSession;
+  browser: BrowserSession;
   state: ConversationState;
   idleTimer?: ReturnType<typeof setTimeout>;
   closing?: Promise<void>;
@@ -56,7 +55,7 @@ function getRuntime(sessionId: string): BrowserRuntime {
     traces: [],
     browser: {
       provider: durable.browser.sessionId ? "browserbase" : "not-started",
-      status: durable.browser.lifecycle === "active" ? "idle" : "idle",
+      status: "idle",
       contextId: durable.browser.contextId,
       contextStatus: durable.browser.contextStatus,
       proxyLocation: durable.browser.proxyLocation,
@@ -83,6 +82,10 @@ export async function runBrowserOperation<T>(
   operation: BrowserOperation<T>,
   includeScreenshot = false,
 ): Promise<BrowserToolOutput<T>> {
+  return withBrowserPrivacyLock(sessionId, () => runBrowserOperationUnlocked(sessionId, operation, includeScreenshot), undefined, Boolean(taskState.get().browser.sessionId));
+}
+
+async function runBrowserOperationUnlocked<T>(sessionId: string, operation: BrowserOperation<T>, includeScreenshot: boolean): Promise<BrowserToolOutput<T>> {
   const runtime = getRuntime(sessionId);
   scheduleIdleClose(sessionId, runtime);
   const traceStart = runtime.state.traces.length;
@@ -98,7 +101,7 @@ export async function runBrowserOperation<T>(
       ),
       new Promise((resolve) => setTimeout(resolve, 50)),
     ]);
-    commitCaptchaQueue(runtime, traceStart);
+    commitCaptchaQueue(runtime);
   }
   let result: T;
   try {
@@ -111,7 +114,7 @@ export async function runBrowserOperation<T>(
       action: "Complete the challenge in the existing Live View, then resume this task.",
     } as T;
   }
-  commitCaptchaQueue(runtime, traceStart);
+  commitCaptchaQueue(runtime);
   scheduleIdleClose(sessionId, runtime);
   return {
     result,
@@ -128,30 +131,20 @@ export async function runBrowserOperation<T>(
   };
 }
 
-function commitCaptchaQueue(runtime: BrowserRuntime, traceStart: number): void {
+function commitCaptchaQueue(runtime: BrowserRuntime): void {
   const transitions = runtime.browser.drainCaptchaTransitions();
   if (!transitions.length) return;
   taskState.update((current) => {
     let next = current;
     for (const transition of transitions) next = applyCaptchaTransition(next, transition);
-    return updateTaskBrowser(
-      next,
-      runtime.state.browser,
-      runtime.state.traces.slice(traceStart).map((trace) => trace.id),
-    );
+    return updateTaskBrowser(next, runtime.state.browser);
   });
 }
 
 export async function saveBrowserRuntime(sessionId: string): Promise<void> {
   const runtime = runtimes.get(sessionId);
   if (runtime)
-    taskState.update((current) =>
-      updateTaskBrowser(
-        current,
-        runtime.state.browser,
-        runtime.state.traces.map((trace) => trace.id),
-      ),
-    );
+    taskState.update((current) => updateTaskBrowser(current, runtime.state.browser));
 }
 
 export async function closeBrowserRuntime(sessionId: string): Promise<void> {
@@ -165,13 +158,7 @@ export async function closeBrowserRuntime(sessionId: string): Promise<void> {
     runtime.closing ??= runtime.browser.close().then(() => {
       runtimes.delete(sessionId);
       taskState.update((current) =>
-        closeTaskBrowser(
-          updateTaskBrowser(
-            current,
-            runtime.state.browser,
-            runtime.state.traces.map((trace) => trace.id),
-          ),
-        ),
+        closeTaskBrowser(updateTaskBrowser(current, runtime.state.browser)),
       );
     }).finally(() => { runtime.closing = undefined; });
     return runtime.closing;
@@ -191,8 +178,8 @@ export function hasBrowserRuntime(sessionId: string): boolean {
   return runtimes.has(sessionId);
 }
 
-export async function listBrowserContexts() {
-  return listAgentContexts();
+export function resumeBrowserAfterHumanInput(sessionId: string): void {
+  runtimes.get(sessionId)?.browser.resumeAfterHumanInput();
 }
 
 export async function createBrowserContext(
@@ -267,7 +254,7 @@ export async function selectBrowserContext(
   contextId: string,
 ): Promise<{ id: string; name: string; selected: true }> {
   const runtime = runtimes.get(sessionId);
-  if (runtime?.browser.hasStarted()) {
+  if (runtime?.browser.hasStarted() || taskState.get().browser.sessionId) {
     throw new Error("Save or close the current browser before you select another Context.");
   }
   await selectAgentContext(contextId);
@@ -303,7 +290,7 @@ export async function saveBrowserContext(
   if (!contextId) {
     const created = await createBrowserContext(
       sessionId,
-      name?.trim() || `Browsie ${new Date().toISOString().slice(0, 10)}`,
+      name?.trim() || `Bell ${new Date().toISOString().slice(0, 10)}`,
       signal,
     );
     contextId = created.id;
@@ -328,60 +315,16 @@ export async function saveBrowserContext(
   };
 }
 
-export function configureBrowserProxyLocation(
-  sessionId: string,
-  requested: BrowserProxyLocation,
-): BrowserToolOutput<{
-  status: "configured";
-  location: BrowserProxyLocation;
-  appliesTo: "next_browser_session";
-}> {
-  if (!process.env.BROWSERBASE_API_KEY) throw new Error("Browserbase is not configured.");
-  const runtime = getRuntime(sessionId);
-  if (runtime.browser.hasStarted() || runtime.state.browser.sessionId) {
-    throw new Error(
-      "Proxy location must be set before the first browser action. Start a new task to use another location.",
-    );
-  }
-  const location = normalizeProxyLocation(requested);
-  const traceStart = runtime.state.traces.length;
-  runtime.state.browser.proxyLocation = location;
-  taskState.update((current) => recordTaskBrowserProxyLocation(current, location));
-  runtime.browser = createRuntimeBrowser(
-    sessionId,
-    runtime.state,
-    runtime.state.browser.contextId,
-    location,
-  );
-  addTrace(
-    runtime.state,
-    "browser",
-    "proxy.location.configure",
-    `Set the next Browserbase session proxy location to ${formatProxyLocation(location)}.`,
-    { location, appliesTo: "next_browser_session" },
-  );
-  return {
-    result: {
-      status: "configured",
-      location,
-      appliesTo: "next_browser_session",
-    },
-    workbench: {
-      browser: { ...runtime.state.browser },
-      traces: runtime.state.traces.slice(traceStart),
-    },
-  };
-}
-
 function createRuntimeBrowser(
   sessionId: string,
   state: ConversationState,
   contextId?: string,
   proxyLocation?: BrowserProxyLocation,
-): BrowsieBrowserSession {
-  return new BrowsieBrowserSession(state, {
+): BrowserSession {
+  return new BrowserSession(state, {
     contextId,
     proxyLocation,
+    captcha: taskState.get().captcha,
     ensureContext: async (currentContextId) => {
       const context = await ensureAgentContext(sessionId, currentContextId);
       state.browser.contextId = context.id;
@@ -392,35 +335,16 @@ function createRuntimeBrowser(
   });
 }
 
-function normalizeProxyLocation(location: BrowserProxyLocation): BrowserProxyLocation {
-  const country = location.country.trim().toUpperCase();
-  const state = location.state?.trim().toUpperCase();
-  const city = location.city?.trim();
-  if (!/^[A-Z]{2}$/.test(country))
-    throw new Error("Proxy country must be a two-letter country code.");
-  if (state && !/^[A-Z0-9_-]{1,32}$/.test(state)) throw new Error("Proxy state is invalid.");
-  if (city && city.length > 80) throw new Error("Proxy city is too long.");
-  return {
-    country,
-    ...(state ? { state } : {}),
-    ...(city ? { city } : {}),
-  };
-}
-
-function formatProxyLocation(location: BrowserProxyLocation): string {
-  return [location.city, location.state, location.country].filter(Boolean).join(", ");
-}
-
 function defaultContextName(record: { title: string }): string {
   const title = record.title.trim();
   if (title && title !== "New task") return title.slice(0, 80);
-  return `Browsie ${new Date().toISOString().slice(0, 10)}`;
+  return `Bell ${new Date().toISOString().slice(0, 10)}`;
 }
 
 function scheduleIdleClose(sessionId: string, runtime: BrowserRuntime): void {
   if (runtime.idleTimer) clearTimeout(runtime.idleTimer);
   if (runtime.closing || runtimes.get(sessionId) !== runtime) return;
-  const configured = Number(process.env.BROWSIE_BROWSER_IDLE_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
+  const configured = Number(process.env.BELL_BROWSER_IDLE_MS ?? DEFAULT_IDLE_TIMEOUT_MS);
   const timeoutMs =
     Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_IDLE_TIMEOUT_MS;
   runtime.idleTimer = setTimeout(() => {

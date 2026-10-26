@@ -1,8 +1,10 @@
 import { getLinkOAuth, safeLinkCall, type LinkOAuth } from "./oauth";
+import { isLinkSandbox } from "./sandbox";
 
 const headers = { "cache-control": "no-store", "referrer-policy": "no-referrer" };
 
 export async function linkCallback(request: Request, service: () => LinkOAuth = getLinkOAuth): Promise<Response> {
+  if (isLinkSandbox()) return new Response("Link OAuth is not enabled in the sandbox.", { status: 404, headers });
   try {
     const params = new URL(request.url).searchParams;
     for (const name of ["state", "code", "error"]) {

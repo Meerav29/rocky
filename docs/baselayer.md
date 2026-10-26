@@ -19,12 +19,11 @@ BASELAYER_PRINCIPAL_REF=<current verified principal from the same organization>
 BASELAYER_ALLOWED_ORIGINS=https://bell-stack-demo-site.vercel.app
 BELL_DEMO_URL=https://bell-stack-demo-site.vercel.app/protected
 STAGEHAND_BROWSER=browserbase
-BROWSIE_LOG_SESSION=false
 ```
 
 Keep the OpenAI and Browserbase credentials already used by Bell. For the phone demo, also keep
 the Linq configuration from [the messaging guide](linq.md). Restart Bell and start a new
-conversation after changing browser logging settings. The shared runtime refuses credential
+conversation after changing browser logging settings. The browser runtime refuses credential
 presentation if the browser session started with logging enabled.
 
 The principal reference is the `principal_ref` returned after identity verification. It is not

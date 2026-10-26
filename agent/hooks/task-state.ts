@@ -1,22 +1,12 @@
-import { defineHook } from "eve/hooks";
+import { defineHook, type HookEvent } from "eve/hooks";
 
-import { closeBrowserRuntime } from "../lib/browser-runtime";
+import { closeBrowserRuntime, resumeBrowserAfterHumanInput } from "../lib/browser-runtime";
 import { applyTaskEvent, taskState } from "../lib/task-state";
 
-const update = (event: unknown, ctx: { session: { id: string } }) =>
-  taskState.update((current) =>
-    applyTaskEvent(
-      current,
-      event as {
-        type: string;
-        data?: Record<string, unknown>;
-        meta?: { id?: string; at?: string };
-      },
-      ctx.session.id,
-    ),
-  );
+const update = (event: HookEvent, ctx: { session: { id: string } }) =>
+  taskState.update((current) => applyTaskEvent(current, event, ctx.session.id));
 
-const cancel = async (event: unknown, ctx: { session: { id: string } }) => {
+const cancel = async (event: HookEvent<"turn.cancelled">, ctx: { session: { id: string } }) => {
   update(event, ctx);
   await closeBrowserRuntime(ctx.session.id);
 };
@@ -24,10 +14,15 @@ export default defineHook({
   events: {
     "session.started": update,
     "turn.started": update,
-    "message.received": update,
+    "message.received": (event, ctx) => {
+      taskState.update((current) => {
+        const next = applyTaskEvent(current, event, ctx.session.id);
+        if (next !== current && current.status === "waiting_for_user")
+          resumeBrowserAfterHumanInput(ctx.session.id);
+        return next;
+      });
+    },
     "step.started": update,
-    "message.completed": update,
-    "action.result": update,
     "input.requested": update,
     "input.resolved": update,
     "turn.completed": update,

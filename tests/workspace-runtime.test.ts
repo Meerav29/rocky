@@ -35,7 +35,7 @@ async function withEveContext(check: () => Promise<void>) {
 
 describe("Bell's shared browser runtime", () => {
   it("redacts form values and preserves the browser identity through Bell's actual import", () => withEveContext(async () => {
-    vi.stubEnv("BROWSIE_HANDOFF_SECRET", "synthetic-shared-handoff-secret-at-least-32-bytes");
+    vi.stubEnv("BELL_HANDOFF_SECRET", "synthetic-shared-handoff-secret-at-least-32-bytes");
     const fill = vi.fn(async () => {});
     const page = { locator: () => ({ fill }), url: async () => "https://shop.example/", title: async () => "Fixture" };
     await runBrowserOperation(sessionId, async browser => {
@@ -44,7 +44,7 @@ describe("Bell's shared browser runtime", () => {
       vi.spyOn(browser, "start").mockResolvedValue();
       vi.spyOn(browser, "close").mockResolvedValue();
       vi.spyOn(internal, "gateCaptcha").mockResolvedValue();
-      Object.assign(browser, { browserbase: {}, sessionLogsDisabled: true, stagehand: {
+      Object.assign(browser, { browserbase: {}, stagehand: {
         experimentalBatch: async <T, A>(callback: (context: { page: typeof page }, args: A) => Promise<T>, args: A) => callback({ page }, args),
       } });
     });

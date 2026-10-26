@@ -373,7 +373,7 @@ describe.skipIf(!databaseUrl)("Link OAuth with PostgreSQL", () => {
         getToken: () => execution.getToken(scoped), requireAuth: () => execution.requireAuth(scoped),
       } as unknown as ToolContext;
       expect(await freshLinkContext(ctx).getToken(provider)).toMatchObject({ token: "access-first" });
-      // Model the other conversation disconnecting while this tool awaits its browser.
+      // Model another conversation disconnecting between requests in this step.
       fetcher.mockResolvedValue(new Response(null, { status: 503 }));
       await expect(service.disconnect(principal)).rejects.toMatchObject({ reason: "revocation_failed" });
       expect(await ctx.getToken(provider)).toMatchObject({ token: "access-first" });

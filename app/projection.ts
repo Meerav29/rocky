@@ -25,13 +25,13 @@ export function browserPreview(events: readonly unknown[]) {
     };
     const output = envelope.result ?? (result.output as Record<string, unknown>);
     const workbench = envelope.workbench;
-    if (result.toolName === "run") {
+    const nextUrl = typeof output.url === "string" ? output.url : workbench?.browser?.url;
+    if (result.toolName === "run" || (typeof nextUrl === "string" && nextUrl !== url)) {
       // Ordinary browser work can navigate without reporting an HTTP status.
       httpStatus = undefined;
       screenshot = undefined;
     }
-    if (typeof workbench?.browser?.url === "string") url = workbench.browser.url;
-    if (typeof output.url === "string") url = output.url;
+    if (typeof nextUrl === "string") url = nextUrl;
     if (typeof output.httpStatus === "number") {
       httpStatus = output.httpStatus;
       screenshot = undefined;

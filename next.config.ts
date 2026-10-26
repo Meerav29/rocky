@@ -7,4 +7,4 @@ const config: NextConfig = {
   serverExternalPackages: ["@browserbasehq/sdk", "@browserbasehq/stagehand", "playwright-core", "pg"],
   turbopack: { root: process.cwd() },
 };
-export default withEve(config);
+export default withEve(config, { eveBuildCommand: "pnpm build:agent" });

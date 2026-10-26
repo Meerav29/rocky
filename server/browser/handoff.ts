@@ -51,7 +51,7 @@ export function issueBrowserHandoffUrl(
   target: BrowserHandoffTarget,
   options: IssueBrowserHandoffOptions = {},
 ): string {
-  const publicUrl = parsePublicUrl(options.publicUrl ?? process.env.BROWSIE_PUBLIC_URL);
+  const publicUrl = parsePublicUrl(options.publicUrl ?? process.env.BELL_PUBLIC_URL);
   const token = issueBrowserHandoffToken(target, options);
   return new URL(`/handoff/${token}`, publicUrl).toString();
 }
@@ -115,6 +115,9 @@ export async function resolveBrowserHandoffLiveViewUrl(
       const apiKey = options.apiKey ?? process.env.BROWSERBASE_API_KEY;
       if (!apiKey) configurationError();
       const browserbase = new Browserbase({ apiKey });
+      const session = await browserbase.sessions.retrieve(browserSessionId);
+      if (session.userMetadata?.networkLogging !== "false" || session.userMetadata?.sessionRecording !== "false")
+        throw new BrowserHandoffError("unavailable", "The browser handoff is not available.");
       const debug = await browserbase.sessions.debug(browserSessionId);
       return debug.debuggerFullscreenUrl;
     });
@@ -215,7 +218,7 @@ function parsePublicUrl(value?: string): URL {
 }
 
 function handoffKey(value?: string): Buffer {
-  const secret = value ?? process.env.BROWSIE_HANDOFF_SECRET;
+  const secret = value ?? process.env.BELL_HANDOFF_SECRET;
   if (!secret || Buffer.byteLength(secret, "utf8") < 32) configurationError();
   return createHash("sha256").update(secret, "utf8").digest();
 }

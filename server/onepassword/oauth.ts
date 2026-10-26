@@ -100,7 +100,10 @@ export async function completeOAuth(request: Request): Promise<Response> {
     });
     const value = await response.json().catch(() => ({})) as { access_token?: unknown; refresh_token?: unknown };
     if (!response.ok || typeof value.access_token !== "string" || typeof value.refresh_token !== "string") return invalid();
-    return new Response("1Password authorization completed. Return to Bell.", {
+    // Preserve the partner OAuth callback while its account/grant integration is unfinished.
+    // Exchanging a code alone does not connect this account to Bell's vault tools.
+    return new Response("1Password authorization was verified, but account connection is not implemented yet. No account was connected to Bell.", {
+      status: 501,
       headers: {
         "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Type": "text/plain; charset=utf-8",
         "Set-Cookie": cookie("", 0),

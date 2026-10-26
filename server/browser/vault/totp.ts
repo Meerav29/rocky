@@ -21,5 +21,6 @@ function decodeBase32(value: string) {
   }
   const bytes = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  if (!bytes.length) throw new Error("Invalid TOTP secret.");
   return Buffer.from(bytes);
 }

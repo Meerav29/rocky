@@ -1,9 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { beginOAuth, completeOAuth, redirectUri } from "../server/onepassword/oauth";
 
 const origin = "https://bell-stack.vercel.app";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 beforeEach(() => {
   vi.stubEnv("ONEPASSWORD_CLIENT_ID", "synthetic-client");
@@ -43,7 +48,7 @@ describe("clean 1Password callback", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("exchanges the code and never returns provider tokens", async () => {
+  it("preserves code exchange without falsely claiming an account is connected or returning tokens", async () => {
     const start = beginOAuth();
     const location = new URL(start.headers.get("location")!);
     const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
@@ -56,8 +61,10 @@ describe("clean 1Password callback", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     const response = await completeOAuth(new Request(`${origin}/api/onepassword/callback?code=synthetic-code&state=${encodeURIComponent(location.searchParams.get("state")!)}`, { headers: { cookie: start.headers.get("set-cookie")! } }));
-    expect(response.status).toBe(200);
-    expect(await response.text()).not.toMatch(/synthetic-access|synthetic-refresh/);
+    expect(response.status).toBe(501);
+    const message = await response.text();
+    expect(message).toContain("No account was connected to Bell");
+    expect(message).not.toMatch(/synthetic-access|synthetic-refresh/);
     expect(response.headers.get("set-cookie")).toMatch(/Max-Age=0/);
     expect(fetcher).toHaveBeenCalledOnce();
   });

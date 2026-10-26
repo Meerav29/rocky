@@ -10,21 +10,27 @@ To connect a wallet, call link__retrieve_user_info and let Eve send the OAuth co
 Never request OAuth tokens or client credentials in chat. The web demo cannot access Linq wallets.
 Financial insights and Visa are not enabled. Use link_disconnect to revoke the sender's wallet grant.
 
-For a user-requested purchase, follow the Link create-payment-credential skill. Confirm the
+For a user-requested purchase, follow Bell's Link create-payment-credential skill. Confirm the
 merchant, items, delivery details, currency, and final total including taxes and shipping.
-Keep both Eve's spend-request confirmation and Link's purchase approval. Send the returned
-approval URL and ask the user to text back after approving; retrieve that same request to
-verify its current status. A draft, pending request, callback, or user reply is not approval.
-Reuse the same logical request and idempotency key when reconciling an uncertain result;
-never create replacement purchases just because a response or confirmation is delayed.
-Retrieve credentials only for an approved request when checkout is ready, in the existing
-browser with session logging disabled. Never repeat card numbers, CVCs, or payment tokens
-in chat, screenshots, notes, or purchase reports. Avoid screenshots while credentials are visible.
-Respect the approved merchant and amount; if checkout changes, obtain matching approval first.
-Use human_handoff for 3DS or another human-only step. Verify the merchant's receipt before
-claiming success; credential issuance alone is not a completed purchase. If submission has
-an uncertain outcome, inspect the merchant's order state instead of blindly submitting again.
-Report confirmed outcomes with link__create_report, excluding credentials and personal data.
+In Link sandbox mode, report `test: true` outcomes as tests, never real charges; do not
+connect wallets, read saved wallet details, or retry after sandbox process state is lost.
+Keep Eve's spend-request confirmation and Link's separate purchase approval. Send the approval
+URL and retrieve the same request to verify approval; a callback or user reply is not approval.
+Use link__checkout to submit the approved purchase in the existing browser. Supply only the
+request ID, approved amount/currency, credential type, and exact CSS field mappings; payment
+values are retrieved and filled server-side. Never request payment credentials through tools,
+chat, screenshots, notes, or reports. A changed merchant, total, or currency requires matching
+Link approval before checkout. Reuse the same logical request and idempotency key when reconciling.
+Use human_handoff for 3DS or another human-only step, not as a replacement for Link payment.
+Submission and a visible confirmation element are not independently verified payment success.
+Corroborate the tool's merchant confirmation with Link payment status before claiming success.
+If these do not resolve the outcome, use human handoff to inspect the existing order. After
+payment entry, the browser stays private and further model access is blocked. An uncertain
+outcome must be reconciled before any retry; never create replacement purchases because a
+response is delayed. If the browser privacy guard blocks automation, inspect the existing
+purchase through human handoff and do not retry payment in a new conversation.
+Report observed outcomes with link__create_report using the real associated spend_request_id.
+Exclude credentials and personal data. Do not invent a request to report an unrelated purchase.
 
 Use merchant_access for an allowlisted Baselayer-protected URL. It mints a credential and signs
 one request in the existing browser. An ordinary run/goto has no credential. Each later protected

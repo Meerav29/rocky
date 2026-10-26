@@ -1,195 +1,103 @@
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename } from "node:fs/promises";
-import { dirname } from "node:path";
+import { createDecipheriv } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { z } from "zod";
 
-import type {
-  LoginInput,
-  SafeLoginItem,
-  SecretRef,
-  VaultProvider,
-  VaultProviderStatus,
-} from "./types";
-import { normalizeHosts } from "./types";
+import { generateTotp } from "./totp";
 
-type Box = { iv: string; tag: string; ciphertext: string };
-type Stored = {
-  version: 1;
-  id: string;
-  label: string;
-  allowedHosts: string[];
-  hasTotp: boolean;
-  createdAt: string;
-  updatedAt: string;
-  keyId: string;
-  wrappedKey: Box;
-  payload: Box;
-};
-type Payload = {
-  username: string;
-  password: string;
-  totpSecret?: string;
-  notes?: string;
-};
-interface VaultStore {
-  read(): Promise<Stored[]>;
-  write(records: Stored[]): Promise<void>;
-}
-export class AtomicFileVaultStore implements VaultStore {
-  constructor(private path = process.env.BROWSIE_VAULT_FILE ?? ".browsie/vault.enc.json") {}
-  async read() {
-    try {
-      const value = JSON.parse(await readFile(this.path, "utf8"));
-      return Array.isArray(value?.records) ? value.records : [];
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
-    }
-  }
-  async write(records: Stored[]) {
-    await mkdir(dirname(this.path), { recursive: true });
-    const temp = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
-    const handle = await open(temp, "wx", 0o600);
-    try {
-      await handle.writeFile(JSON.stringify({ version: 1, records }));
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await rename(temp, this.path);
-  }
-}
-export class NativeVaultProvider implements VaultProvider {
-  constructor(
-    private store: VaultStore = new AtomicFileVaultStore(),
-    private masterKey = readMasterKey(),
-  ) {}
-  async status(): Promise<VaultProviderStatus> {
-    return {
-      provider: "native",
-      configured: Boolean(this.masterKey),
-      healthy: Boolean(this.masterKey),
-      mode: "local-encrypted",
-      message: this.masterKey
-        ? "Encrypted local demo Vault ready."
-        : "Set BROWSIE_VAULT_MASTER_KEY to a 32-byte base64 or 64-character hex key.",
-    };
-  }
+const boxSchema = z.object({
+  iv: z.base64().refine((value) => Buffer.from(value, "base64").length === 12),
+  tag: z.base64().refine((value) => Buffer.from(value, "base64").length === 16),
+  ciphertext: z.base64().min(1),
+});
+const recordSchema = z.object({
+  version: z.literal(1),
+  id: z.string().min(1),
+  label: z.string().min(1),
+  allowedHosts: z.array(z.string().min(1).refine((value) => {
+    try { return new URL(`https://${value}`).hostname === value; } catch { return false; }
+  })).min(1),
+  hasTotp: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  keyId: z.literal("local-v1"),
+  wrappedKey: boxSchema,
+  payload: boxSchema,
+});
+const storeSchema = z.object({ version: z.literal(1), records: z.array(recordSchema) })
+  .refine(({ records }) => new Set(records.map(({ id }) => id)).size === records.length);
+const payloadSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  totpSecret: z.string().optional(),
+});
+
+// The v1 file is trusted operator configuration: only credential fields are encrypted.
+// Keep this reader for existing vaults; Bell does not expose vault management routes.
+export class NativeVault {
+  constructor(private path?: string, private masterKey?: Buffer) {}
+
   async list() {
-    return (await this.store.read()).map(toSafe);
+    this.key();
+    return (await this.read()).map((record) => ({
+      provider: "native" as const,
+      itemId: record.id,
+      label: record.label,
+      allowedHosts: record.allowedHosts,
+      fields: { username: true, password: true, totp: record.hasTotp },
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    }));
   }
-  async create(input: LoginInput) {
-    requireInput(input);
-    const now = new Date().toISOString(),
-      record = this.encrypt(randomUUID(), input, now, now);
-    const all = await this.store.read();
-    await this.store.write([...all, record]);
-    return toSafe(record);
+
+  async login(itemId: string) {
+    const masterKey = this.key(),
+      record = (await this.read()).find(({ id }) => id === itemId);
+    if (!record) throw new Error("The selected local vault login was not found.");
+    try {
+      const dataKey = openBox(masterKey, record.wrappedKey),
+        payload = payloadSchema.parse(JSON.parse(openBox(dataKey, record.payload).toString("utf8")));
+      let totp: string | undefined;
+      if (payload.totpSecret) {
+        try { totp = generateTotp(payload.totpSecret); } catch {
+          // Keep password login usable; the browser requests human help when OTP is unavailable.
+        }
+      }
+      return {
+        allowedHosts: record.allowedHosts,
+        username: payload.username,
+        password: payload.password,
+        ...(totp ? { totp } : {}),
+      };
+    } catch {
+      throw new Error("Could not decrypt the local vault login. Check the vault file and master key.");
+    }
   }
-  async update(id: string, input: LoginInput) {
-    requireInput(input);
-    const all = await this.store.read(),
-      index = all.findIndex((x) => x.id === id);
-    if (index < 0) throw new Error("Vault item not found.");
-    all[index] = this.encrypt(id, input, all[index].createdAt, new Date().toISOString());
-    await this.store.write(all);
-    return toSafe(all[index]);
+
+  private async read() {
+    try {
+      const source = await readFile(this.path ?? process.env.BELL_VAULT_FILE ?? ".bell/vault.enc.json", "utf8");
+      return storeSchema.parse(JSON.parse(source)).records;
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+      throw new Error("Could not read the local vault. Check its path, permissions, and v1 file format.");
+    }
   }
-  async delete(id: string) {
-    const all = await this.store.read(),
-      next = all.filter((x) => x.id !== id);
-    if (next.length === all.length) throw new Error("Vault item not found.");
-    await this.store.write(next);
-  }
-  async resolve(ref: SecretRef) {
-    if (ref.provider !== "native") throw new Error("Provider mismatch.");
-    const record = (await this.store.read()).find((x) => x.id === ref.itemId);
-    if (!record) throw new Error("Vault item not found.");
-    const payload = this.decrypt(record);
-    const value = ref.field === "totp" ? payload.totpSecret : payload[ref.field];
-    if (!value) throw new Error("Vault field unavailable.");
-    return value;
-  }
-  private encrypt(id: string, input: LoginInput, createdAt: string, updatedAt: string): Stored {
-    const master = requireKey(this.masterKey),
-      dataKey = randomBytes(32);
-    return {
-      version: 1,
-      id,
-      label: input.label.trim(),
-      allowedHosts: normalizeHosts(input.allowedHosts),
-      hasTotp: Boolean(input.totpSecret),
-      createdAt,
-      updatedAt,
-      keyId: "local-v1",
-      wrappedKey: seal(master, dataKey),
-      payload: seal(
-        dataKey,
-        Buffer.from(
-          JSON.stringify({
-            username: input.username,
-            password: input.password,
-            ...(input.totpSecret ? { totpSecret: input.totpSecret } : {}),
-            ...(input.notes ? { notes: input.notes } : {}),
-          } satisfies Payload),
-        ),
-      ),
-    };
-  }
-  private decrypt(record: Stored): Payload {
-    const master = requireKey(this.masterKey),
-      key = openBox(master, record.wrappedKey);
-    return JSON.parse(openBox(key, record.payload).toString("utf8"));
+
+  private key(): Buffer {
+    const configured = process.env.BELL_VAULT_MASTER_KEY?.trim(),
+      key = this.masterKey ?? (configured
+        ? Buffer.from(configured, /^[a-f0-9]{64}$/i.test(configured) ? "hex" : "base64")
+        : undefined);
+    if (!key || key.length !== 32)
+      throw new Error("Set BELL_VAULT_MASTER_KEY to a 32-byte base64 or 64-character hex key.");
+    return key;
   }
 }
-function seal(key: Buffer, value: Buffer): Box {
-  const iv = randomBytes(12),
-    cipher = createCipheriv("aes-256-gcm", key, iv),
-    ciphertext = Buffer.concat([cipher.update(value), cipher.final()]);
-  return {
-    iv: iv.toString("base64"),
-    tag: cipher.getAuthTag().toString("base64"),
-    ciphertext: ciphertext.toString("base64"),
-  };
-}
-function openBox(key: Buffer, box: Box) {
+
+export const nativeVault = new NativeVault();
+
+function openBox(key: Buffer, box: z.infer<typeof boxSchema>) {
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(box.iv, "base64"));
   decipher.setAuthTag(Buffer.from(box.tag, "base64"));
   return Buffer.concat([decipher.update(Buffer.from(box.ciphertext, "base64")), decipher.final()]);
-}
-function readMasterKey() {
-  const value = process.env.BROWSIE_VAULT_MASTER_KEY?.trim();
-  if (!value) return;
-  const key = /^[a-f0-9]{64}$/i.test(value)
-    ? Buffer.from(value, "hex")
-    : Buffer.from(value, "base64");
-  return key.length === 32 ? key : undefined;
-}
-function requireKey(key?: Buffer) {
-  if (!key) throw new Error("Vault master key is not configured.");
-  return key;
-}
-function requireInput(input: LoginInput) {
-  if (
-    !input.label.trim() ||
-    !input.username ||
-    !input.password ||
-    normalizeHosts(input.allowedHosts).length === 0
-  )
-    throw new Error("Label, host, username, and password are required.");
-}
-function toSafe(record: Stored): SafeLoginItem {
-  const fields = {
-    username: true,
-    password: true,
-    totp: Boolean(record.hasTotp),
-  };
-  return {
-    provider: "native",
-    itemId: record.id,
-    label: record.label,
-    allowedHosts: record.allowedHosts,
-    fields,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
 }

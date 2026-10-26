@@ -1,13 +1,13 @@
 # Text Bell through Linq
 
-Bell's assigned demo line is **+12025550100** (`+12025550100` in configuration).
+Configure Bell with a receiving phone number from your own Linq account.
 Linq carries iMessage and SMS. [Link wallet OAuth and checkout](link.md) use this channel's
 verified sender identity and require separate configuration.
 
 ```text
 Your phone -> Linq -> Bell /eve/v1/linq -> Eve conversation
                                               |
-                           shared Browsie tools + Browserbase browser
+                           Bell browser tools + Browserbase browser
                                               |
 Your phone <- Linq <- Bell's reply in the original chat
 ```
@@ -33,7 +33,7 @@ still need a reachable HTTPS application host. See
    ```dotenv
    LINQ_API_KEY=<API token for the Linq account that owns the line>
    LINQ_WEBHOOK_SECRET=<signing secret from the webhook subscription>
-   BELL_LINQ_PHONE_NUMBER=+12025550100
+   BELL_LINQ_PHONE_NUMBER=<your Linq receiving number, starting with + and country code>
    BELL_LINQ_ALLOWED_SENDERS=<your personal phone number, starting with + and country code>
    ```
 
@@ -41,7 +41,8 @@ still need a reachable HTTPS application host. See
    sending number are different settings. An empty or invalid sender list accepts nobody.
    For this single-operator demo, allow only the operator's numbers because saved vault and
    browser Context data are shared. Group chats and iMessage email handles are not supported
-   by this phone-only policy. `BROWSIE_LINQ_ALLOWED_USER_IDS` configures Browsie, not Bell.
+   by this phone-only policy. Bell uses `BELL_LINQ_ALLOWED_SENDERS`; the former
+   `BELL_LINQ_ALLOWED_USER_IDS` setting has no effect.
 
 2. Deploy Bell behind your chosen HTTPS application origin. Protect the web UI,
    session-control routes, and any administration endpoints with application authentication.
@@ -56,7 +57,7 @@ still need a reachable HTTPS application host. See
    | --- | --- |
    | Target URL | `https://<your reachable Bell host>/eve/v1/linq?version=2026-02-03` |
    | Event | `message.received` |
-   | Phone-number filter | `+12025550100` |
+   | Phone-number filter | Your `BELL_LINQ_PHONE_NUMBER` receiving line |
 
    Save the subscription's signing secret as `LINQ_WEBHOOK_SECRET`, then restart Bell. The target
    is the Bell application. Best Buy is the website Bell visits, so do not enter it as the webhook
@@ -67,12 +68,13 @@ still need a reachable HTTPS application host. See
    See Linq's [subscription API](https://docs.linqapp.com/channel/imessage/api/resources/webhook_subscriptions/methods/create/)
    and [signed webhook guide](https://docs.linqapp.com/channel/imessage/guides/webhooks/).
 
-4. For optional human handoff, set `BROWSIE_PUBLIC_URL` to Bell's reachable origin and
-   `BROWSIE_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
+4. For optional human handoff, set `BELL_PUBLIC_URL` to Bell's reachable origin and
+   `BELL_HANDOFF_SECRET` to a random secret of at least 32 characters. A localhost handoff
    link works only on the computer running Bell; a phone needs the deployed HTTPS origin.
-   Keep handoff links private because the token grants control of that browser until expiry.
+   Keep handoff links private: they grant browser control. Token expiry prevents reopening
+   the link but does not revoke an already-open Live View; end the browser session when done.
 
-5. Use persistent storage for Bell's Context metadata and vault data on a single-instance
+5. Use persistent storage for Bell's Context metadata and any existing local vault file on a single-instance
    host, or configure durable shared storage before a multi-instance/serverless deployment.
    Hosted 1Password access requires a scoped `OP_SERVICE_ACCOUNT_TOKEN`; `OP_ACCOUNT`
    desktop authorization works only on the machine running the 1Password app. Keep all
@@ -80,7 +82,7 @@ still need a reachable HTTPS application host. See
 
 ## Demo from your phone
 
-Text the assigned line from an allowed personal number:
+Text your configured Linq line from an allowed personal number:
 
 1. "Open https://www.bestbuy.com and tell me the homepage title."
 2. "Take a screenshot of that page."

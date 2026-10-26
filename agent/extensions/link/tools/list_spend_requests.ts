@@ -9,6 +9,6 @@ export default defineTool({
   approval: list_spend_requests.approval,
   async execute(input, ctx) {
     ctx.abortSignal.throwIfAborted();
-    return spendRequestListMetadata(await linkMetadataRequest(() => list_spend_requests.execute(input, freshLinkContext(ctx))));
+    return spendRequestListMetadata(await linkMetadataRequest(() => list_spend_requests.execute(input, freshLinkContext(ctx, undefined, "list"))));
   },
 });

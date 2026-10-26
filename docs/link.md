@@ -1,4 +1,38 @@
-# Link wallet OAuth over Linq
+# Link sandbox and wallet OAuth over Linq
+
+## Sandbox: no database or saved wallet credentials
+
+Run a single long-lived Eve process with `LINK_SANDBOX=1`. Inject
+`LINK_SANDBOX_ACCESS_TOKEN` into its environment and set `LINK_SANDBOX_PRINCIPAL_ID` to the
+verified operator's Linq principal (`linq:<sender_handle.id>` from the signed Linq event,
+not a phone number). Keep the Linq receiving-number and sender allowlist checks enabled.
+The token is obtained through the operator's Link application and is never requested in chat.
+Bell does not write it to a file, database, workflow state, or model output. Do not save it in
+`.env` or commit it. No `DATABASE_URL`, migrations, OAuth client, or encryption key is needed
+for this sandbox path. Other sender identities and the anonymous web demo cannot use the token.
+
+Every creation is forced to `test: true`; the model cannot enable a real charge. Stripe
+[test requests](https://docs.stripe.com/agentic-commerce/agents/link-agent-wallet/use-link-wallet-pay-online#test-your-integration)
+return test credentials without charging the underlying payment method. Bell uses a fresh
+process-specific idempotency namespace and only permits requests created by that process.
+Saved wallet profiles, payment methods, shipping addresses, and financial-history tools are
+unavailable. Lists contain only this process's test requests. Approval and private card entry
+work as described below. Use a merchant test checkout; do not place real fulfillment orders.
+
+Request IDs and browser privacy locks exist only in process memory. After private card entry,
+the model cannot inspect that browser again. After a restart or worker change, old request IDs
+and recovered checkout browsers are refused, including when conversations survive. Use human
+handoff to reconcile an existing attempt; do not restart or create another request to retry it.
+This sandbox path is for one long-lived worker, not a multi-instance or serverless deployment.
+It does not refresh or persist the token. Replace an expired token through the operator's Link
+application and restart deliberately; revoke access there when finished. Bell's disconnect
+tool does not claim to revoke the externally managed sandbox token.
+
+Conversation history, task state, and non-secret test purchase/status messages still use Eve's
+existing storage. Browserbase logging and recording remain disabled. Link and the test merchant
+retain their own records; Bell's no-wallet-storage rule does not control those applications.
+
+## Real Link: operator-owned OAuth and storage
 
 Bell connects a wallet to the verified sender of a private Linq message. The user texts Bell,
 opens Link's consent page, and returns to the same conversation. Eve suspends and resumes the
@@ -8,7 +42,7 @@ This uses the [Link Eve extension](https://eve.dev/integrations/link) and its
 [interactive OAuth contract](https://github.com/stripe/link-cli/tree/main/packages/integrations/eve).
 The Eve catalog's static-token quick start is not Bell's configuration.
 
-## Configure
+## Configure real Link
 
 1. Complete [Linq setup](linq.md), including signed webhooks and the trusted-number allowlist.
    Retain the private-operator policy: saved browser Contexts and vaults are still shared.
@@ -51,7 +85,7 @@ Configuration and database connections load only when Link is used. Browsing and
 require these values. Grants request only `payment_methods.agentic` and `userinfo:read`;
 financial-data tools are disabled.
 
-## Connect and purchase
+## Connect and purchase with real Link
 
 Text **“List my Link payment methods.”** Bell sends a private consent link. Complete Link's
 authentication and consent within ten minutes. Eve resumes the request in the original chat.
@@ -59,25 +93,39 @@ Keep consent links private: possession allows completing the connection for the 
 sender. Denial or expiry ends the attempt; ask Bell for a new link when ready.
 
 For checkout, give Bell the merchant, item, quantity, and budget. Bell confirms the final total,
-including shipping and tax. When you request a Link spend request, Eve asks for confirmation
-before creating it. Link provides a separate approval URL. Bell can check that request's
-status, but approval does not complete a purchase.
+including shipping and tax. Eve confirmation and Link approval are both retained. Bell checks
+the same request and uses `link__checkout` to retrieve and submit credentials server-side in the
+existing browser. The model receives status metadata, never card numbers, CVCs, or payment tokens.
+Human handoff is reserved for 3DS and other human-only steps. A submission or confirmation element
+is not proof of payment: Bell must verify the merchant receipt/order and Link status before reporting
+success. An uncertain submission must be reconciled before retrying.
 
-Payment entry is a human step. Bell sends a browser handoff link and waits while you complete
-checkout with your own payment method. Bell cannot retrieve or fill Link-issued card numbers,
-CVCs, or payment tokens. Do not send payment credentials in chat. After you return, Bell checks
-the merchant's receipt before reporting success or retrying an uncertain submission. A Link
-approval is not evidence that the merchant used that request.
+For real Link (`LINK_SANDBOX=0`), apply `migrations/003_link_checkout.sql` before deploying checkout. Browser operations use a
+PostgreSQL session advisory lock while Link is configured, so use direct or session-pooled
+connections. A committed privacy guard blocks later automation once payment entry begins, including after success, failure, or a worker restart. Handoff can still inspect the existing purchase; a new conversation must not retry an
+uncertain purchase. The guard contains only the conversation ID and timestamp, never credentials.
 
-Browserbase session logging and recording are disabled. Do not capture screenshots while
-payment details are visible.
+Checkout supports virtual-card inputs (including MM/YY or separate expiry fields) and billing
+addresses. Shared Payment Token API/MPP and Stripe Link Pay Token submission are not implemented
+by this tool; their metadata tools remain available. Do not substitute a token for a card. Targets are exact CSS selectors,
+optionally inside one iframe. By default, both the page and payment frame must have the approved
+merchant's exact HTTPS origin. For a hosted checkout or payment iframe, explicitly configure
+`LINK_CHECKOUT_ORIGINS` as a JSON mapping from merchant origins to trusted payment origins, e.g.
+`{"https://shop.example":["https://checkout.payment.example"]}`. Never derive this mapping from
+model input or page content. A different amount, currency, or merchant requires matching approval.
+
+Browserbase logging and recording stay disabled. The operation serializes fills and browser reads,
+clears reachable payment fields and retains the privacy guard. Merchant scripts may retain copies
+that clearing inputs cannot erase, so the model cannot read this browser again. Do not capture
+screenshots while payment details are visible. Test the actual merchant and credential format in a
+sandbox before enabling production checkout.
 
 Text **“Disconnect my Link wallet.”** After confirmation, Bell blocks token resolution,
 invalidates pending consent attempts, and revokes the remote grant before removing its tokens.
 If revocation fails, encrypted tokens remain for retrying disconnect and the wallet stays blocked.
 Disconnect does not cancel orders or merchant subscriptions or undo an already submitted purchase.
 
-## Persistence and recovery
+## Real Link persistence and recovery
 
 Grants use `(issuer, principal ID)` from verified Linq authentication. They survive conversation
 changes and restarts and cannot be selected through model-supplied IDs. Different senders have
@@ -122,7 +170,7 @@ encrypted verifier data from abandoned attempts:
 DELETE FROM bell_link_oauth_attempts WHERE expires_at < now() - interval '1 day';
 ```
 
-PostgreSQL here stores Link state only. Eve still needs durable workflow storage to resume
+PostgreSQL here stores Link state and browser privacy guards. Eve still needs durable workflow storage to resume
 parked turns after host replacement, and Bell's Context metadata and optional local vault files
 need their documented storage. This change does not make the rest of Bell ready for arbitrary multi-instance hosting
 or unrelated users.
@@ -133,7 +181,8 @@ OAuth tokens and client secrets never enter tool arguments or conversational out
 overrides the native extension's credential retrieval: the tool accepts only a spend-request ID,
 and every spend-request result is projected to an explicit metadata allowlist before Eve can
 persist it. Card and payment-token fields, including unexpected provider fields, are discarded.
-The mounted purchase skill uses the same human checkout procedure.
+The separate `link__checkout` tool retrieves credentials only inside its server-side operation and
+returns an enumerated status. The mounted purchase skill uses this tool for approved Link payment.
 
 Wallet metadata and shipping addresses are still personal data. Restrict transcripts to the
 trusted operator and apply your host's retention/deletion policy. Disabled Browserbase logging
@@ -146,7 +195,9 @@ created by older versions; delete those transcripts and their backups under your
 PostgreSQL database to include persistence tests. The suite creates and drops a unique schema;
 it never uses `DATABASE_URL` or calls Link. CI provides PostgreSQL automatically. Tests cover
 encryption, identity isolation, callbacks, restart recovery, concurrent refresh, revocation,
-spend-request path validation, and the metadata-only payment boundary.
+spend-request path validation, the metadata-only payment boundary, and persistent browser quarantine.
+Set `TEST_LINK_BROWSER=1` and, if needed, `TEST_CHROME_PATH` to include real Chrome checkout tests
+against intercepted synthetic merchant pages. Those tests submit fixture forms, not real purchases.
 
 For an operator-run live smoke test, text “List my Link payment methods,” complete consent, and
 verify the response arrives in the same chat. Send a follow-up to confirm grant reuse, then

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLinkSandbox, isSandboxRequest } from "../../../../server/link/sandbox";
 
 export const spendRequestId = z.string().min(1).max(255)
   .regex(/^[A-Za-z0-9_-]+$/, "Invalid Link spend-request ID.");
@@ -93,12 +94,12 @@ const metadata = z.object({
 export function spendRequestMetadata(value: unknown) {
   const result = metadata.safeParse(value);
   if (!result.success) throw new Error("Unexpected Link spend-request response.");
-  return result.data;
+  return isLinkSandbox() ? { ...result.data, test: true as const } : result.data;
 }
 
 export function spendRequestListMetadata(value: unknown) {
   if (!Array.isArray(value)) throw new Error("Unexpected Link spend-request list.");
-  return value.map(spendRequestMetadata);
+  return value.map(spendRequestMetadata).filter(item => isSandboxRequest(item.id));
 }
 
 export function spendApprovalMetadata(value: unknown) {

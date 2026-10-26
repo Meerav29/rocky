@@ -10,6 +10,6 @@ export default defineTool({
   async execute(args, ctx) {
     const input = spendRequestInput.parse(args);
     ctx.abortSignal.throwIfAborted();
-    return spendRequestMetadata(await linkMetadataRequest(() => cancel_spend_request.execute(input, freshLinkContext(ctx))));
+    return spendRequestMetadata(await linkMetadataRequest(() => cancel_spend_request.execute(input, freshLinkContext(ctx, input.id))));
   },
 });

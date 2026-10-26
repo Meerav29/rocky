@@ -4,12 +4,12 @@ import { freshLinkContext } from "../../../lib/link-auth";
 import { linkMetadataRequest, spendRequestInput, spendRequestMetadata } from "../lib/spend-requests";
 
 export default defineTool({
-  description: "Retrieve a Link spend request's status and approval metadata. Never returns card numbers, security codes, or payment tokens. Use human_handoff for the user to complete payment in the browser.",
+  description: "Retrieve a Link spend request's status and approval metadata. Never returns card numbers, security codes, or payment tokens. Use link__checkout to complete an approved purchase with server-side credential entry.",
   inputSchema: spendRequestInput,
   async execute(args, ctx) {
     const input = spendRequestInput.parse(args);
     ctx.abortSignal.throwIfAborted();
-    const result = await linkMetadataRequest(() => retrieve_spend_request.execute(input, freshLinkContext(ctx)));
+    const result = await linkMetadataRequest(() => retrieve_spend_request.execute(input, freshLinkContext(ctx, input.id)));
     return result === null ? null : spendRequestMetadata(result);
   },
 });

@@ -2,6 +2,7 @@ import { create_spend_request } from "@stripe/link-integrations-eve/tools";
 import { defineTool } from "eve/tools";
 import { freshLinkContext } from "../../../lib/link-auth";
 import { linkMetadataRequest, spendRequestMetadata } from "../lib/spend-requests";
+import { rememberSandboxRequest, sandboxPurchase } from "../../../../server/link/sandbox";
 
 export default defineTool({
   description: create_spend_request.description,
@@ -10,6 +11,8 @@ export default defineTool({
   approval: create_spend_request.approval,
   async execute(input, ctx) {
     ctx.abortSignal.throwIfAborted();
-    return spendRequestMetadata(await linkMetadataRequest(() => create_spend_request.execute(input, freshLinkContext(ctx))));
+    const result = spendRequestMetadata(await linkMetadataRequest(() => create_spend_request.execute(sandboxPurchase(input), freshLinkContext(ctx, undefined, "create"))));
+    rememberSandboxRequest(result.id);
+    return result;
   },
 });

@@ -57,9 +57,10 @@ Best Buy browsing does not require Baselayer and does not demonstrate merchant v
 
 ## Optional integrations
 
-- Link: connect a wallet from an allowlisted Linq conversation using OAuth. Bell sends a
+- Link sandbox: test purchases with an operator-injected token, no database or saved wallet
+  credentials. Real Link: connect a wallet from an allowlisted Linq conversation using OAuth. Bell sends a
   consent URL and resumes in the same chat. PostgreSQL stores encrypted per-sender grants;
-  spend requests retain Eve confirmation and Link approval. Payment entry uses human handoff;
+  spend requests retain Eve confirmation and Link approval. Approved payment entry uses the server-side checkout tool;
   card details and payment tokens are not returned to the model. Follow [Link setup](docs/link.md).
 - 1Password: for local desktop access, set `OP_ACCOUNT="Your account name"` in `.env.local`,
   using the account name shown in the 1Password sidebar. In the desktop app, enable

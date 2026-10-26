@@ -171,6 +171,7 @@ export class BrowserSession {
   async withHostedPage<T>(
     signal: AbortSignal,
     operation: (page: Page, connectUrl: string) => Promise<T>,
+    privateResult = false,
   ): Promise<T> {
     signal.throwIfAborted();
     const release = await this.acquireOperation();
@@ -186,8 +187,10 @@ export class BrowserSession {
       if (!session.connectUrl) throw new Error("The hosted browser connection is unavailable.");
       const result = await operation(page, session.connectUrl);
       this.xpathMap = {};
-      this.updateBrowserState(await page.url(), await page.title());
-      await this.gateCaptcha();
+      if (!privateResult) {
+        this.updateBrowserState(await page.url(), await page.title());
+        await this.gateCaptcha();
+      }
       return result;
     } finally {
       release();

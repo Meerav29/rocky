@@ -10,6 +10,6 @@ export default defineTool({
   async execute(args, ctx) {
     const input = spendRequestInput.parse(args);
     ctx.abortSignal.throwIfAborted();
-    return spendApprovalMetadata(await linkMetadataRequest(() => request_spend_approval.execute(input, freshLinkContext(ctx))));
+    return spendApprovalMetadata(await linkMetadataRequest(() => request_spend_approval.execute(input, freshLinkContext(ctx, input.id))));
   },
 });

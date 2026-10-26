@@ -49,6 +49,15 @@ describe("shared hosted-page integration boundary", () => {
     expect(state.browser.url).toBe("https://example.com/");
     expect(JSON.stringify(state)).not.toContain("private-connection");
   });
+  it("does not observe the page or run post-CAPTCHA snapshots after a private operation", async () => {
+    const { session, state, page } = fixture();
+    const title = vi.spyOn(page, "title"), url = vi.spyOn(page, "url");
+    await session.withHostedPage(new AbortController().signal, async () => ({ submitted: true }), true);
+    expect(title).not.toHaveBeenCalled();
+    expect(url).not.toHaveBeenCalled();
+    expect((session as unknown as { gateCaptcha: unknown }).gateCaptcha).toHaveBeenCalledTimes(1);
+    expect(state.browser.url).toBeUndefined();
+  });
   it("does no work for an already-cancelled call", async () => {
     const { session } = fixture();
     const operation = vi.fn();

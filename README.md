@@ -29,7 +29,6 @@ Set `OPENAI_API_KEY` and `BROWSERBASE_API_KEY` in `.env`. For ordinary browsing,
 pnpm dev
 ```
 
-Open [localhost:4320](http://127.0.0.1:4320), select **Open demo site**, and give Bell a task. Follow-up messages in the same conversation reuse the browser session. Ask for a screenshot to see progress or a handoff to interact with the browser. Handoff requires the [public URL and secret settings](docs/browser-runtime.md#configuration).
 
 ## Start here
 

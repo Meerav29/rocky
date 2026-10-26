@@ -9,7 +9,8 @@
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 4320",
-    "build": "eve build --skip-sandbox-prewarm && next build",
+    "build:agent": "eve build --skip-sandbox-prewarm && node scripts/package-browser-assets.mjs",
+    "build": "pnpm build:agent && next build",
     "start": "next start --hostname 127.0.0.1 --port 4320",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

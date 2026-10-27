@@ -3,19 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BrowserSession } from "../../server/browser/browser-session";
 import type { ConversationState } from "../../server/browser/types";
 
-const login = {
-  allowedHosts: ["shop.example"],
-  username: "synthetic-user",
-  password: "synthetic-password",
-  totp: "synthetic-otp",
-  usernameTarget: "#username",
-  passwordTarget: "#password",
-  totpTarget: "#otp",
-  submitTarget: "#submit",
-  otpSubmitTarget: "#otp-submit",
-  successTarget: "#success",
-};
-
 function fixture() {
   const state: ConversationState = {
     id: "browser-security-test",
@@ -55,67 +42,6 @@ function fixture() {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-});
-
-describe("vault login credential boundary", () => {
-  it.each(["iframe >> #password", "xpath=/html/body/iframe/input", "/html/body/iframe/input", "(//iframe)/input"])(
-    "rejects selectors that could send credentials into another frame: %s", async passwordTarget => {
-      const { session, start, fill } = fixture();
-      await expect(session.secureLogin({ ...login, passwordTarget })).rejects.toThrow("CSS selectors");
-      expect(start).not.toHaveBeenCalled();
-      expect(fill).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each([
-    "http://shop.example/login",
-    "https://other.example/login",
-    "https://user:password@shop.example/login",
-  ])("does not fill credentials at an unsafe destination: %s", async (url) => {
-    const { session, setUrl, fill } = fixture();
-    setUrl(url);
-    await expect(session.secureLogin(login)).rejects.toThrow("Secure login failed");
-    expect(fill).not.toHaveBeenCalled();
-  });
-
-  it("rechecks the destination before filling the password", async () => {
-    const { session, setUrl, fill } = fixture();
-    fill.mockImplementationOnce(async () => { setUrl("https://other.example/login"); });
-    await expect(session.secureLogin(login)).rejects.toThrow("Secure login failed");
-    expect(fill.mock.calls).toEqual([[login.usernameTarget, login.username]]);
-  });
-
-  it.each([false, true])("rechecks the destination before OTP, afterSubmit=%s", async (afterSubmit) => {
-    const { session, setUrl, fill, click } = fixture();
-    if (afterSubmit) {
-      click.mockImplementationOnce(async () => { setUrl("https://other.example/otp"); });
-    } else {
-      fill.mockImplementation(async (target) => {
-        if (target === login.passwordTarget) setUrl("http://shop.example/otp");
-      });
-    }
-    await expect(session.secureLogin({ ...login, totpAfterSubmit: afterSubmit }))
-      .rejects.toThrow("Secure login failed");
-    expect(fill.mock.calls.some(([, value]) => value === login.totp)).toBe(false);
-  });
-
-  it("allows HTTPS login without exposing secrets in its result or trace", async () => {
-    const { session, state, fill } = fixture();
-    const result = await session.secureLogin(login);
-    expect(result.status).toBe("complete");
-    expect(fill).toHaveBeenCalledTimes(3);
-    for (const value of [login.username, login.password, login.totp]) {
-      expect(JSON.stringify({ state, result })).not.toContain(value);
-    }
-  });
-
-  it("redacts failures and releases the operation lock for the next attempt", async () => {
-    const { session, state, fill } = fixture();
-    fill.mockRejectedValueOnce(new Error(login.password));
-    await expect(session.secureLogin(login)).rejects.toThrow("Secure login failed");
-    expect(JSON.stringify(state)).not.toContain(login.password);
-    await expect(session.secureLogin(login)).resolves.toMatchObject({ status: "complete" });
-  });
 });
 
 describe("browser navigation boundary", () => {

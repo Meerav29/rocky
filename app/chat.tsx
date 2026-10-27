@@ -59,7 +59,7 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
     <main>
       <header>
         <div>
-          <p className="eyebrow">PERSONAL ASSISTANT STACK</p>
+          <p className="eyebrow">PERSONAL AGENT</p>
           <h1>
             Bell<span>.</span>
           </h1>
@@ -86,6 +86,13 @@ export default function Chat({ sessionId, demoUrl }: { sessionId?: string; demoU
             }
           >
             Open demo site ↗
+          </button>
+          <button
+            className="starter"
+            disabled={waiting}
+            onClick={() => void send("Give me today's Hacker News brief.")}
+          >
+            Hacker News brief ↗
           </button>
           <div className="messages" aria-live="polite">
             {agent.data.messages

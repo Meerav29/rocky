@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import taskHooks from "../../agent/hooks/task-state";
 import { closeBrowserRuntime, runBrowserOperation } from "../../agent/lib/browser-runtime";
 import { applyCaptchaTransition, closeTaskBrowser, taskState } from "../../agent/lib/task-state";
-import { BrowserSession, CaptchaHandoffError } from "../../server/browser/browser-session";
 import { ContextContainer, contextStorage } from "../../node_modules/eve/dist/src/context/container.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -68,17 +67,6 @@ describe("resuming a browser after CAPTCHA handoff", () => {
       } as never, { session: { id } } as never);
       expect(taskState.get()).toMatchObject({ status: "waiting_for_user", captcha: { status: "errored" } });
     }));
-
-  it("preserves CAPTCHA handoff errors from secure login", async () => {
-    const browser = new BrowserSession({
-      id: "login-handoff", traces: [], browser: { provider: "not-started", status: "idle" },
-    }, { captcha: { status: "errored" } });
-    vi.spyOn(browser, "start").mockResolvedValue();
-    await expect(browser.secureLogin({
-      allowedHosts: ["shop.example"], username: "fixture", password: "synthetic-only",
-      usernameTarget: "#username", passwordTarget: "#password", submitTarget: "#submit",
-    })).rejects.toBeInstanceOf(CaptchaHandoffError);
-  });
 
   it("drops a closed browser's challenge before starting a replacement", () =>
     contextStorage.run(new ContextContainer(), () => {

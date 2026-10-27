@@ -1,4 +1,3 @@
-import { personalBrowserEnabled, requireReusableContexts } from "../onepassword/browser-policy";
 import Browserbase from "@browserbasehq/sdk";
 import {
   localBrowser,
@@ -103,10 +102,8 @@ export class BrowserSession {
       if (requested === "browserbase") {
         const apiKey = process.env.BROWSERBASE_API_KEY;
         if (!apiKey) throw new Error("BROWSERBASE_API_KEY is required for Browserbase mode.");
-        if (personalBrowserEnabled() && (this.options.contextId || process.env.BROWSERBASE_CONTEXT_ID))
-          throw new Error("Start a new conversation without a reusable Context for personal 1Password.");
         const currentContextId = this.options.contextId ?? process.env.BROWSERBASE_CONTEXT_ID;
-        if (this.options.ensureContext && !personalBrowserEnabled()) {
+        if (this.options.ensureContext) {
           const context = await this.options.ensureContext(currentContextId);
           this.options.contextId = context.id;
           contextStatus = context.status;
@@ -344,112 +341,6 @@ export class BrowserSession {
     }
   }
 
-  async secureLogin(input: {
-    allowedHosts: string[];
-    username: string;
-    password: string;
-    usernameTarget: string;
-    passwordTarget: string;
-    submitTarget: string;
-    totp?: string;
-    totpTarget?: string;
-    otpSubmitTarget?: string;
-    successTarget?: string;
-    totpAfterSubmit?: boolean;
-  }): Promise<{
-    status: "complete" | "waiting_for_user" | "unverified";
-    host: string;
-    url: string;
-  }> {
-    const selectors = [input.usernameTarget, input.passwordTarget, input.submitTarget,
-      input.totpTarget, input.otpSubmitTarget, input.successTarget];
-    if (selectors.some((selector) => selector && (/^\s*(?:xpath=|\/|\()/i.test(selector) || selector.includes(">>"))))
-      throw new Error("Secure login requires CSS selectors in the top-level page; frame selectors are not allowed.");
-    const release = await this.acquireOperation();
-    try {
-      await this.start();
-      await this.gateCaptcha();
-      const started = performance.now();
-      const result = await this.requireStagehand().experimentalBatch(
-        async ({ page }, values) => {
-          const checkDestination = async () => {
-            const destination = new URL(await page.url());
-            if (
-              destination.protocol !== "https:" ||
-              destination.username ||
-              destination.password ||
-              !values.allowedHosts.includes(destination.hostname.toLowerCase())
-            )
-              throw new Error("Unsafe credential destination.");
-          };
-          await checkDestination();
-          await page.locator(values.usernameTarget).fill(values.username);
-          await checkDestination();
-          await page.locator(values.passwordTarget).fill(values.password);
-          if (values.totpTarget && values.totp && !values.totpAfterSubmit) {
-            await checkDestination();
-            await page.locator(values.totpTarget).fill(values.totp);
-          }
-          await checkDestination();
-          await page.locator(values.submitTarget).click();
-          await page.waitForTimeout(1_000);
-          if (values.totpTarget && values.totp && values.totpAfterSubmit) {
-            await checkDestination();
-            await page.locator(values.totpTarget).fill(values.totp);
-            if (values.otpSubmitTarget) {
-              await checkDestination();
-              await page.locator(values.otpSubmitTarget).click();
-            }
-            await page.waitForTimeout(1_000);
-          }
-          const url = await page.url(),
-            title = await page.title();
-          const success = values.successTarget
-            ? (await page.locator(values.successTarget).count()) > 0
-            : false;
-          return { url, title, success };
-        },
-        input,
-        { timeout: 45_000 },
-      );
-      await this.gateCaptcha();
-      this.updateBrowserState(result.url, result.title);
-      const host = new URL(result.url).hostname;
-      const status =
-        input.totpTarget && !input.totp
-          ? "waiting_for_user"
-          : result.success
-            ? "complete"
-            : "unverified";
-      addTrace(
-        this.state,
-        "tool",
-        "vault.login",
-        status === "complete"
-          ? `Verified login state on ${host}.`
-          : status === "waiting_for_user"
-            ? `Login on ${host} is waiting for a human challenge.`
-            : `Filled the login on ${host}, but success is not verified yet.`,
-        { host, status, secretValuesRedacted: true },
-        Math.round(performance.now() - started),
-      );
-      return { status, host, url: result.url };
-    } catch (error) {
-      if (error instanceof CaptchaHandoffError) throw error;
-      addTrace(
-        this.state,
-        "error",
-        "vault.login",
-        "The secure login attempt failed. Secret values were redacted.",
-      );
-      throw new Error(
-        "Secure login failed. Inspect the current page and field selectors, then retry.",
-      );
-    } finally {
-      release();
-    }
-  }
-
   async screenshot(): Promise<{
     mediaType: "image/png";
     data: string;
@@ -503,7 +394,6 @@ export class BrowserSession {
   }
 
   async exportCookies(): Promise<CookieParam[]> {
-    requireReusableContexts();
     if (!this.hasStarted()) return [];
     return this.browser!.context.cookies();
   }
@@ -585,8 +475,6 @@ export class BrowserSession {
           const prior = await this.browserbase.sessions.retrieve(persistedSessionId);
           if (prior.userMetadata?.networkLogging !== "false" || prior.userMetadata?.sessionRecording !== "false")
             throw new Error("Session logging and recording settings cannot be verified.");
-          if (personalBrowserEnabled() && (prior.userMetadata?.onepasswordExtension !== process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID || prior.userMetadata?.privateContext !== "true"))
-            throw new Error("The personal 1Password browser settings cannot be verified.");
           const browser = await stagehandBrowserbase.connect({
             apiKey,
             sessionId: persistedSessionId,
@@ -901,10 +789,8 @@ export function browserbaseLaunchOptions(
 ) {
   const contextId = durableContextId ?? process.env.BROWSERBASE_CONTEXT_ID;
   const projectId = process.env.BROWSERBASE_PROJECT_ID;
-  if (personalBrowserEnabled() && contextId) throw new Error("Personal 1Password cannot use a reusable Context.");
   return {
     apiKey,
-    ...(personalBrowserEnabled() ? { extensionId: process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID!.trim() } : {}),
     ...(projectId ? { projectId } : {}),
     proxies: proxyLocation
       ? [
@@ -927,7 +813,6 @@ export function browserbaseLaunchOptions(
       transport: "stagehand-v4-eve",
       networkLogging: "false",
       sessionRecording: "false",
-      ...(personalBrowserEnabled() ? { onepasswordExtension: process.env.BROWSERBASE_1PASSWORD_EXTENSION_ID!.trim(), privateContext: "true" } : {}),
     },
   };
 }
